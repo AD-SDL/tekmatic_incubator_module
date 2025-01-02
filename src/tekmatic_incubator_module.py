@@ -24,10 +24,10 @@ from wei.types.step_types import (
 )
 from wei.utils import extract_version
 
-import python_template_interface as interface
+import tekmatic_incubator_interface as interface
 
-python_template_module = RESTModule(
-    name="python_template_module",
+tekmatic_incubator_module = RESTModule(
+    name="tekmatic_incubator_module",
     version=extract_version(Path(__file__).parent.parent / "pyproject.toml"),
     description="TODO: Provide a description of your module here.",
     model="TODO: specify the device model this module controls",
@@ -41,7 +41,7 @@ python_template_module = RESTModule(
 # * All of these functions are optional, and can be removed if not needed
 
 
-@python_template_module.startup()
+@tekmatic_incubator_module.startup()
 def custom_startup_handler(state: State):
     """
     Custom startup handler that is called whenever the module is started.
@@ -55,7 +55,7 @@ def custom_startup_handler(state: State):
     # state.interface = interface.Interface()  # *Initialize the device, if needed
 
 
-@python_template_module.shutdown()
+@tekmatic_incubator_module.shutdown()
 def custom_shutdown_handler(state: State):
     """
     Custom shutdown handler that is called whenever the module is shutdown.
@@ -66,7 +66,7 @@ def custom_shutdown_handler(state: State):
     # del state.interface  # *Close device connection or do other cleanup, if needed
 
 
-@python_template_module.state_handler()
+@tekmatic_incubator_module.state_handler()
 def custom_state_handler(state: State) -> ModuleState:
     """
     Custom state handler that is called whenever the modules state is requested via the REST API.
@@ -97,7 +97,7 @@ def custom_state_handler(state: State) -> ModuleState:
 # TODO: Define functions to handle each action the device should be able to perform
 
 
-@python_template_module.action(
+@tekmatic_incubator_module.action(
     name="add",
     description="An example action that adds two numbers together.",
     #* Optionally, you can annotate the values returned by the action, if any
@@ -118,8 +118,8 @@ def add(
 
     Example workflow step yaml:
 
-    - name: Add on python_template
-      module: python_template
+    - name: Add on tekmatic_incubator
+      module: tekmatic_incubator
       action: add
       args:
         a: 5
@@ -132,7 +132,7 @@ def add(
 
 
 # * If you don't specify a name or description, the function name and docstring will be used
-@python_template_module.action(
+@tekmatic_incubator_module.action(
     results=[
         ValueModuleActionResult(
             label="difference",
@@ -151,8 +151,8 @@ def subtract(
 
     Example workflow step yaml:
 
-    - name: Subtract on python_template
-      module: python_template
+    - name: Subtract on tekmatic_incubator
+      module: tekmatic_incubator
       action: subtract
       args:
         a: 12
@@ -169,7 +169,7 @@ def subtract(
     return StepResponse.step_succeeded(data={"difference": state.difference})
 
 
-@python_template_module.action(
+@tekmatic_incubator_module.action(
     name="run_protocol",
     description="Run a protocol file",
     results=[
@@ -187,8 +187,8 @@ def run_protocol(
 
     Example workflow step yaml:
 
-    - name: Run protocol on python_template
-      module: python_template
+    - name: Run protocol on tekmatic_incubator
+      module: tekmatic_incubator
       action: run_protocol
       files:
         protocol: path/to/protocol/file
@@ -220,7 +220,7 @@ def print_func(output: str) -> StepResponse:
     return StepResponse.step_succeeded()
 
 
-python_template_module.actions.append(
+tekmatic_incubator_module.actions.append(
     ModuleAction(
         name="print",
         description="A simple print action",
@@ -243,38 +243,38 @@ functions below.
 By default, a module supports SHUTDOWN, RESET, LOCK, and UNLOCK modules. This can be overridden by using the decorators below, or setting a custom Set for python_rest_module.admin_commands
 """
 
-# @python_template_module.pause
+# @tekmatic_incubator_module.pause
 # def pause(state: State):
 #     """Support pausing actions on this module"""
 #     pass
 
-# @python_template_module.resume
+# @tekmatic_incubator_module.resume
 # def resume(state: State):
 #     """Support resuming actions on this module"""
 #     pass
 
-# @python_template_module.cancel
+# @tekmatic_incubator_module.cancel
 # def cancel(state: State):
 #     """Support cancelling actions on this module"""
 #     pass
 
-# @python_template_module.lock
+# @tekmatic_incubator_module.lock
 # def lock(state: State):
 #     """Support locking the module to prevent new actions from being accepted"""
 #     pass
 
-# @python_template_module.unlock
+# @tekmatic_incubator_module.unlock
 # def unlock(state: State):
 #     """Support unlocking the module to allow new actions to be accepted"""
 #     pass
 
-# @python_template_module.reset
+# @tekmatic_incubator_module.reset
 # def reset(state: State):
 #     """Support resetting the module.
 #     This should clear errors and reconnect to/reinitialize the device, if possible"""
 #     pass
 
-# @python_template_module.shutdown
+# @tekmatic_incubator_module.shutdown
 # def shutdown(state: State):
 #     """Support shutting down the module"""
 #     pass
@@ -282,4 +282,4 @@ By default, a module supports SHUTDOWN, RESET, LOCK, and UNLOCK modules. This ca
 
 # *This runs the arg_parser, startup lifecycle method, and starts the REST server
 if __name__ == "__main__":
-    python_template_module.start()
+    tekmatic_incubator_module.start()

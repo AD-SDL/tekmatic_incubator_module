@@ -1,5 +1,5 @@
 [project]
-name = "python_template_module"
+name = "tekmatic_incubator_module"
 version = "0.0.0"
 description = "TODO: Add a description here"
 authors = [{name = "Ryan D. Lewis", email="ryan.lewis@anl.gov"}] # TODO: update authors list
@@ -15,7 +15,7 @@ readme = "README.md"
 license = {text = "MIT"}
 
 [project.urls]
-homepage = "https://github.com/AD-SDL/python_template_module"
+homepage = "https://github.com/AD-SDL/tekmatic_incubator_module"
 
 #####################
 # Development Tools #

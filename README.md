@@ -1,4 +1,4 @@
-# python_template_module
+# tekmatic_incubator_module
 
 A template module, implemented in python, for integrating a device into a WEI workcell.
 
@@ -9,11 +9,11 @@ A template module, implemented in python, for integrating a device into a WEI wo
 
 ## Renaming
 
-To automatically replace `python_template` with the name of your instrument, run the "Rename Module Repo" GitHub Actions Workflow in your repository: [Manually Running a Workflow](https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-workflow-runs/manually-running-a-workflow)
+To automatically replace `tekmatic_incubator` with the name of your instrument, run the "Rename Module Repo" GitHub Actions Workflow in your repository: [Manually Running a Workflow](https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-workflow-runs/manually-running-a-workflow)
 
 N.B. this assumes your repository is named using the `<instrument_name>_module` format.
 
-Alternatively, you can run `.github/rename.sh python_template <new_name>` locally and commit the results.
+Alternatively, you can run `.github/rename.sh tekmatic_incubator <new_name>` locally and commit the results.
 
 ## TODO's
 
