@@ -5,21 +5,17 @@ from pathlib import Path
 import time
 from starlette.datastructures import State
 
+
 """
-TODOs: 
-- test all driver funtions
-- add docstrings to all functions
+TODOs:
 - how to handle errors, where should that happen?
-
-- FORMAT ALL RESPONSES
-
+- 
 """
 
 
 class Interface:
     """
-    The skeleton for a device interface.
-    TODO: Replace with your device-specific interface implementation
+    Basic interface for Tekmatic Single Plate Incubators
     """
 
     def __init__(self, dll_path=r"C:\\Program Files\\INHECO\\Incubator-Control\\ComLib.dll", port="COM5"):
@@ -31,14 +27,10 @@ class Interface:
         self.incubator_com = Com()
         self.open_connection(port)
 
-    # def __del__(self):
-    #     """Disconnect/cleanup interface"""
-    #     self.close_connection()
 
-    # DEVICE CONTROL -------------------------------------------------------------------------------------------------------
+    # DEVICE CONTROL
     def open_connection(self, port):
         """Opens the connection to the incubator over the specified COM port"""
-
         response = self.incubator_com.openCom(port)
         if response == 77:
             print("Com connection opened sucessfully")
@@ -48,17 +40,14 @@ class Interface:
 
     def close_connection(self):
         """Closes any existing open connection, no response expected on success or fail"""
-
         self.incubator_com.closeCom()
         print("Com connection closed")
 
-
-    def initialize_device(self):   # WORKING
+    def initialize_device(self):
         """Initializes the Tekmatic Single Plate Incubator Device through the open connection. """
         # TODO: what is the response if initialization fails?
         self.send_message("AID",read_delay=3)
         print("Tekmatic incubator initialized")
-
 
     def reset_device(self):
         """Resets the Tekmatic Single Plate Incubator Device
@@ -78,37 +67,38 @@ class Interface:
         return response
 
 
-    # TEMPERATURE CONTROL -------------------------------------------------------------------------------------------------------
+    # TEMPERATURE CONTROL
     def get_actual_temperature(self):
-        "Returns the actual temperature as measured by main sensor on incubator (sensor 1)"
-        # RAT Selector (selector = 1,2,or 3, default 1 (main))
-
-        # TODO: Should we report the temperature of all sensors or just the main one? RAT, RAT2, RAT3
+        """Returns the actual temperature as measured by main sensor on incubator (sensor 1).
+        Note: There are two other sensors that we don't report. Get their values with "RAT2" and "RAT3" """
         # TODO: Format temperature response
         response = self.send_message("RAT")
-        return response
+        temperature = float(response) / 10
+        return temperature
 
     def get_target_temperature(self):
         """Returns the set target temperature of the incubator"""
         # TODO: format temperature response
         response = self.send_message("RTT")
-        return response
+        temperature = float(response) / 10
+        return temperature
 
-    def set_target_temperature(self, temperature=None):
+    def set_target_temperature(self, temperature:float=22.0):
         """Sets the target temperature, if no temperature specified, defaults to 22 deg C"""
-        # TODO: check that any temperature inputs are valid (int between 0 and 800 after x10)
-        # TODO: format temperature response
-        message = "STT" + str(int(temperature*10)) if temperature else "STT"
-        response = self.send_message(message)
-        return response
+        if 0 <= (int(temperature*10)) <= 800:
+            message = "STT" + str(int(temperature*10))
+            response = self.send_message(message)
+            return response
+        else:
+            print("Error: temperature input invalid in set_target_temperature method")
 
-    def enable_heater(self):  # WORKING
+    def enable_heater(self):
         """Enables the device heating element.
         Note: can read the set value with self.send_message("RHE"). 0 = off, 1 = on.
         """
         self.send_message("SHE1")
 
-    def disable_heater(self):  # WORKING
+    def disable_heater(self):
         """Disable the device heating element.
         Note: can read the set value with self.send_message("RHE"). 0 = off, 1 = on.
         """
@@ -116,16 +106,16 @@ class Interface:
 
 
     # DOOR ACTIONS -------------------------------------------------------------------------------------------------------
-    def open_dooor(self):  # WORKING
+    def open_dooor(self):  
         """Opens the door"""
         self.send_message("AOD", read_delay=5) # wait 5 seconds for door to open before reading com response
 
 
-    def close_door(self):  # WORKING
+    def close_door(self):  
         """Closes the door"""
         self.send_message("ACD", read_delay=5) # wait 5 seconds for door to close before reading com response
 
-    def report_door_status(self):  # WORKING
+    def report_door_status(self):  
         """Returns 1 if door open, 0 if door closed"""
         response = self.send_message("RDS")
         return response
@@ -151,7 +141,7 @@ class Interface:
         """Disables the device shaking element"""
         self.send_message("ASE0", read_delay=5)
 
-    def set_shaker_parameters(self, amplitude:int=20, frquency:int=142):  # WORKING
+    def set_shaker_parameters(self, amplitude:int=20, frquency:int=142):  
         """Sets the shaking parameters
 
         Amplitude: shaking distance in 1/10 mm, 0-30 valid, 20 default
@@ -188,8 +178,8 @@ class Interface:
         # convert them message to byte array
         bytes_message = bytes([ord(c) for c in message_string])
 
-        # format the message, send over com port and collect response
-        response = self.incubator_com.sendMsg(
+        # format the message, send over com port and collect response 
+        self.incubator_com.sendMsg(
             bytes_message,
             bytes_message_length,
             bytes_device_ID,
@@ -201,10 +191,11 @@ class Interface:
         # Read COM port response
         response = self.incubator_com.readCom()
         formatted_response = self.format_response(response)
-        print(f"Message: {message_string}, com response: {formatted_response}")
 
-        # return response
-        return formatted_response  # returned response will be 88 if mesage sent correctly
+        # TESTING
+        # print(f"Message: {message_string}, com response: {formatted_response}")
+
+        return formatted_response
 
 
     def format_response(self, response:str):
@@ -222,27 +213,28 @@ if __name__ == "__main__":
     # com.report_error_flags()
 
     # # Door testing -------------------
-    com.open_dooor()
-    com.close_door()
+    # com.open_dooor()
+    # com.close_door()
     com.report_door_status()
-    print(com.format_response(com.report_labware()))
+    com.report_labware()
 
     # # Temperature testing --------------
-    com.get_target_temperature()
-    com.get_actual_temperature()
+    print(f"target_temp: {com.get_target_temperature()}")
+
+    print(f"actual temp: {com.get_actual_temperature()}")
 
     # com.set_target_temperature(30.0)
     
     # com.set_target_temperature()
 
     # # Shaker testing --------------
-    com.enable_shaker("ND")
-    com.send_message("RSE")
+    # com.enable_shaker("ND")
+    # com.send_message("RSE")
 
-    time.sleep(5)
+    # time.sleep(5)
 
-    com.disable_shaker()
-    com.send_message("RSE")
+    # com.disable_shaker()
+    # com.send_message("RSE")
 
     # read shaker settings
     # print("FX")
