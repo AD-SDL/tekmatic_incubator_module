@@ -1,5 +1,5 @@
 """
-REST-based node that interfaces with WEI and provides a simple Sleep(t) function
+REST-based node for Tekmatic Single Plate Incubators that interfaces with WEI
 """
 
 from pathlib import Path
@@ -24,212 +24,84 @@ from wei.types.step_types import (
 )
 from wei.utils import extract_version
 
-import tekmatic_incubator_interface as interface
+import tekmatic_incubator_interface 
 
-tekmatic_incubator_module = RESTModule(
+rest_module = RESTModule(
     name="tekmatic_incubator_module",
-    version=extract_version(Path(__file__).parent.parent / "pyproject.toml"),
-    description="TODO: Provide a description of your module here.",
-    model="TODO: specify the device model this module controls",
+    version="0.0.1",
+    description="A REST node to control Tekmatic Single Plate Incubators",
+    model="tekmatic",
 )
 
-#***********#
-#*Lifecycle*#
-#***********#
+# add arguments
+rest_module.arg_parser.add_argument(
+    "--dll_path", type=str, help="path to incubator control dll (ComLib.dll)", default="C:\\Program Files\\INHECO\\Incubator-Control\\ComLib.dll"
+)
+rest_module.arg_parser.add_argument(
+    "--device_id", type=int, help="device ID of the Tekmatic Incubator device ", default=2
+)
+rest_module.arg_parser.add_argument(
+    "--stack_floor", type=int, help="stack floor of the Tekmatic Incubator device", default=0
+)
 
-# TODO: Define any custom functionality needed to handle the startup, shutdown, and state of the device
-# * All of these functions are optional, and can be removed if not needed
+# parse the arguments
+args = rest_module.arg_parser.parse_args()
 
 
-@tekmatic_incubator_module.startup()
+@rest_module.startup()
 def custom_startup_handler(state: State):
     """
-    Custom startup handler that is called whenever the module is started.
-
-    If this isn't provided, the default startup handler will be used, which will do nothing.
+    Initializes the tekmatic interface and opens the COM connection
     """
-    state.sum = 0
-    state.difference = 0
-    state.interface = None
-
-    # state.interface = interface.Interface()  # *Initialize the device, if needed
+    state.tekmatic_interface = tekmatic_incubator_interface.Interface()
 
 
-@tekmatic_incubator_module.shutdown()
-def custom_shutdown_handler(state: State):
-    """
-    Custom shutdown handler that is called whenever the module is shutdown.
+# @rest_module.shutdown()
+# def custom_shutdown_handler(state: State):
+#     """
+#     Custom shutdown handler that is called whenever the module is shutdown.
 
-    If this isn't provided, the default shutdown handler will be used, which will do nothing.
-    """
+#     If this isn't provided, the default shutdown handler will be used, which will do nothing.
+#     """
 
-    # del state.interface  # *Close device connection or do other cleanup, if needed
-
-
-@tekmatic_incubator_module.state_handler()
-def custom_state_handler(state: State) -> ModuleState:
-    """
-    Custom state handler that is called whenever the modules state is requested via the REST API.
-
-    If this isn't provided, the default state handler will be used, which will return the following:
-
-    ModuleState(status=state.status, error=state.error)
-    """
-
-    # if state.interface:
-        # state.interface.query_state(state)  # *Query the state of the device, if supported
-
-    return ModuleState.model_validate(
-        {
-            "status": state.status,  # *Required, Dict[ModuleStatus, bool]
-            "error": state.error, # * Optional, str
-            # *Custom state fields
-            "sum": state.sum,
-            "difference": state.difference,
-        }
-    )
+#     # del state.interface  # *Close device connection or do other cleanup, if needed
 
 
-#*********#
-#*Actions*#
-#*********#
+# @rest_module.state_handler()
+# def custom_state_handler(state: State) -> ModuleState:
+#     """
+#     Custom state handler that is called whenever the modules state is requested via the REST API.
 
-# TODO: Define functions to handle each action the device should be able to perform
+#     If this isn't provided, the default state handler will be used, which will return the following:
+
+#     ModuleState(status=state.status, error=state.error)
+#     """
+
+#     # if state.interface:
+#         # state.interface.query_state(state)  # *Query the state of the device, if supported
+
+#     return ModuleState.model_validate(
+#         {
+#             "status": state.status,  # *Required, Dict[ModuleStatus, bool]
+#             "error": state.error, # * Optional, str
+#             # *Custom state fields
+#             "sum": state.sum,
+#             "difference": state.difference,
+#         }
+#     )
 
 
-@tekmatic_incubator_module.action(
-    name="add",
-    description="An example action that adds two numbers together.",
-    #* Optionally, you can annotate the values returned by the action, if any
-    results=[
-        ValueModuleActionResult(
-            label="sum",
-            description="The sum of a and b"
-        )
-    ]
+# OPEN TRAY ACTION
+@rest_module.action(
+    name="open", description="Open the tekmatic incubator plate tray"
 )
-def add(
-    a: Annotated[float, "First number to add"],
-    b: Annotated[float, "Second number to add"],
-    state: State,  # *This is an optional argument that can be used to access the current state of the module
+def open(
+    state: State,
+    action: ActionRequest,
 ) -> StepResponse:
-    """
-    Add two numbers together
+    """Opens the tekmatic incubator tray"""
 
-    Example workflow step yaml:
-
-    - name: Add on tekmatic_incubator
-      module: tekmatic_incubator
-      action: add
-      args:
-        a: 5
-        b: 7
-    """
-
-    state.sum = a + b
-
-    return StepResponse.step_succeeded(data={"sum": state.sum})
-
-
-# * If you don't specify a name or description, the function name and docstring will be used
-@tekmatic_incubator_module.action(
-    results=[
-        ValueModuleActionResult(
-            label="difference",
-            description="The difference between a and b (and optionally c)"
-        )
-    ]
-)
-def subtract(
-    a: Annotated[float, "First number to subtract from"],
-    b: Annotated[float, "Second number to subtract"],
-    action: ActionRequest,  # *This is an optional argument that can be used to access the entire action request
-    state: State,  # *This is an optional argument that can be used to access the current state of the module
-) -> StepResponse:
-    """
-    Subtract two numbers
-
-    Example workflow step yaml:
-
-    - name: Subtract on tekmatic_incubator
-      module: tekmatic_incubator
-      action: subtract
-      args:
-        a: 12
-        b: 10
-    """
-
-    state.difference = (
-        action.args["a"] - action.args["b"]
-    )  # *This is equivalent to `state.difference = a - b`
-    state.difference -= action.args.get(
-        "c", 0
-    )  # * You can also use get to provide a default value
-
-    return StepResponse.step_succeeded(data={"difference": state.difference})
-
-
-@tekmatic_incubator_module.action(
-    name="run_protocol",
-    description="Run a protocol file",
-    results=[
-        LocalFileModuleActionResult(
-            label="output_file",
-            description="The output file from the protocol",
-        )
-    ]
-)
-def run_protocol(
-    protocol: Annotated[UploadFile, "Protocol file to run"],
-) -> StepFileResponse:
-    """
-    Run a protocol file
-
-    Example workflow step yaml:
-
-    - name: Run protocol on tekmatic_incubator
-      module: tekmatic_incubator
-      action: run_protocol
-      files:
-        protocol: path/to/protocol/file
-    """
-    # *Save the protocol file to a temporary location
-    with NamedTemporaryFile() as f:
-        f.write(protocol.file.read())
-        f.seek(0)
-
-        # *Run protocol file
-        interface.run_protocol(Path(f.name))
-
-    output_file = Path("path/to/output/file")
-
-    return StepFileResponse(
-        status=StepStatus.SUCCEEDED,
-        files={
-            "output_file": output_file,
-        },
-    )
-
-
-# * If you don't want to/can't use the decorator, you can also add actions like this:
-def print_func(output: str) -> StepResponse:
-    """
-    Print a message
-    """
-    print(output)
-    return StepResponse.step_succeeded()
-
-
-tekmatic_incubator_module.actions.append(
-    ModuleAction(
-        name="print",
-        description="A simple print action",
-        function=print_func,
-        args=[
-            ModuleActionArg(name="output", type="str", description="Message to print")
-        ],
-    )
-)
+    state.tekmatic.
 
 #****************#
 #*Admin Commands*#
@@ -282,4 +154,4 @@ By default, a module supports SHUTDOWN, RESET, LOCK, and UNLOCK modules. This ca
 
 # *This runs the arg_parser, startup lifecycle method, and starts the REST server
 if __name__ == "__main__":
-    tekmatic_incubator_module.start()
+    rest_module.start()
