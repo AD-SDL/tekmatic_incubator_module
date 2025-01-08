@@ -35,7 +35,8 @@ class Interface:
         if response == 77:
             print("Com connection opened sucessfully")
         else: # response 170 means failed
-            print("Com open connection failed")
+            # print("Com open connection failed")
+            raise Exception("Failed to open Tekmatic Com connection")
         return response
 
     def close_connection(self):
@@ -92,13 +93,13 @@ class Interface:
         else:
             print("Error: temperature input invalid in set_target_temperature method")
 
-    def enable_heater(self):
+    def start_heater(self):
         """Enables the device heating element.
         Note: can read the set value with self.send_message("RHE"). 0 = off, 1 = on.
         """
         self.send_message("SHE1")
 
-    def disable_heater(self):
+    def stop_heater(self):
         """Disable the device heating element.
         Note: can read the set value with self.send_message("RHE"). 0 = off, 1 = on.
         """
@@ -106,16 +107,15 @@ class Interface:
 
 
     # DOOR ACTIONS -------------------------------------------------------------------------------------------------------
-    def open_dooor(self):  
+    def open_door(self): 
         """Opens the door"""
         self.send_message("AOD", read_delay=5) # wait 5 seconds for door to open before reading com response
 
-
-    def close_door(self):  
+    def close_door(self):
         """Closes the door"""
         self.send_message("ACD", read_delay=5) # wait 5 seconds for door to close before reading com response
 
-    def report_door_status(self):  
+    def report_door_status(self):
         """Returns 1 if door open, 0 if door closed"""
         response = self.send_message("RDS")
         return response
@@ -126,7 +126,7 @@ class Interface:
         return response
 
     # SHAKER COMMANDS -------------------------------------------------------------------------------------------------------
-    def enable_shaker(self, status=1):
+    def start_shaker(self, status="ND"):
         """Enables the device shaking element
         Status:
             1 = on
@@ -137,11 +137,11 @@ class Interface:
         else:
             print("Error: invalid status in enable_shaker method")
 
-    def disable_shaker(self):
+    def stop_shaker(self):
         """Disables the device shaking element"""
         self.send_message("ASE0", read_delay=5)
 
-    def set_shaker_parameters(self, amplitude:int=20, frquency:int=142):  
+    def set_shaker_parameters(self, amplitude:int=20, frquency:int=142):
         """Sets the shaking parameters
 
         Amplitude: shaking distance in 1/10 mm, 0-30 valid, 20 default
@@ -193,7 +193,7 @@ class Interface:
         formatted_response = self.format_response(response)
 
         # TESTING
-        # print(f"Message: {message_string}, com response: {formatted_response}")
+        print(f"Message: {message_string}, com response: {formatted_response}")
 
         return formatted_response
 
@@ -215,13 +215,13 @@ if __name__ == "__main__":
     # # Door testing -------------------
     # com.open_dooor()
     # com.close_door()
-    com.report_door_status()
-    com.report_labware()
+    # com.report_door_status()
+    # com.report_labware()
 
-    # # Temperature testing --------------
-    print(f"target_temp: {com.get_target_temperature()}")
+    # # # Temperature testing --------------
+    # print(f"target_temp: {com.get_target_temperature()}")
 
-    print(f"actual temp: {com.get_actual_temperature()}")
+    # print(f"actual temp: {com.get_actual_temperature()}")
 
     # com.set_target_temperature(30.0)
     
@@ -272,6 +272,16 @@ if __name__ == "__main__":
 
     # com.disable_heater()
     # com.send_message("RHE")
+
+    com.set_target_temperature(300)
+    com.start_heater()
+
+    com.set_shaker_parameters(frquency=100)
+    com.start_shaker("ND")  # allow shaking even if no labware detected
+
+    time.sleep(10)
+
+    com.stop_shaker()
 
     com.close_connection()
 
