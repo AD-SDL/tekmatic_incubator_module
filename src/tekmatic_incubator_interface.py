@@ -4,6 +4,8 @@ import clr
 from pathlib import Path
 import time
 from starlette.datastructures import State
+from ctypes import c_bool
+import threading
 
 
 """
@@ -21,7 +23,7 @@ class Interface:
     def __init__(self, dll_path=r"C:\\Program Files\\INHECO\\Incubator-Control\\ComLib.dll", port="COM5"):
         """Initializes and opens the connection to the incubator"""
 
-        # TODO: make this a command line argument
+        self.lock = threading.Lock()
         clr.AddReference(dll_path)
         from IncubatorCom import Com
         self.incubator_com = Com()
@@ -31,18 +33,20 @@ class Interface:
     # DEVICE CONTROL
     def open_connection(self, port):
         """Opens the connection to the incubator over the specified COM port"""
-        response = self.incubator_com.openCom(port)
-        if response == 77:
-            print("Com connection opened sucessfully")
-        else: # response 170 means failed
-            # print("Com open connection failed")
-            raise Exception("Failed to open Tekmatic Com connection")
-        return response
+        with self.lock:
+            response = self.incubator_com.openCom(port)
+            if response == 77:
+                print("Com connection opened sucessfully")
+            else: # response 170 means failed
+                # print("Com open connection failed")
+                raise Exception("Failed to open Tekmatic Com connection")
+            return response
 
     def close_connection(self):
         """Closes any existing open connection, no response expected on success or fail"""
-        self.incubator_com.closeCom()
-        print("Com connection closed")
+        with self.lock:
+            self.incubator_com.closeCom()
+            print("Com connection closed")
 
     def initialize_device(self):
         """Initializes the Tekmatic Single Plate Incubator Device through the open connection. """
@@ -105,9 +109,24 @@ class Interface:
         """
         self.send_message("SHE")
 
+    def is_heater_active(self):
+        """Returns True if heater/cooler is activated, otherwise False"""
+        response = self.send_message("RHE")
+
+        try:
+            response = int(response)
+            if response == 0:  # 0 = off
+                return False
+            elif response in [1,2]:  # 1 = on, 2 = on with booster
+                return True
+            else:
+                raise Exception("Unexpected integer response from is_heater_active query")
+        except Exception as e:
+            print("Unable to parse is_heater_active response")
+            raise(e)
 
     # DOOR ACTIONS -------------------------------------------------------------------------------------------------------
-    def open_door(self): 
+    def open_door(self):
         """Opens the door"""
         self.send_message("AOD", read_delay=5) # wait 5 seconds for door to open before reading com response
 
@@ -141,6 +160,23 @@ class Interface:
         """Disables the device shaking element"""
         self.send_message("ASE0", read_delay=5)
 
+    def is_shaker_active(self):
+        """Returns True if shaker is active, False otherwise"""
+        response = self.send_message("RSE")
+
+        try:
+            response = int(response)
+            if response in [0,2]:
+                return False
+            elif response == 1:
+                return True
+            else:
+                raise Exception("Unable to read shaker state")
+        except Exception as e:
+            print("Unable to parse is_shaker_active response")
+            raise(e)
+
+
     def set_shaker_parameters(self, amplitude:int=20, frquency:int=142):
         """Sets the shaking parameters
 
@@ -170,32 +206,34 @@ class Interface:
     def send_message(self, message_string, device_id=2, stack_floor=0, read_delay=.5):
         """Formats and sends message to Tekmatic Device, then collects device response"""
 
-        # convert message length, device ID, and stack floor to bytes
-        bytes_message_length = len(message_string) & 0xFF
-        bytes_device_ID = device_id & 0xFF
-        bytes_stack_floor = stack_floor & 0xFF
+        with self.lock:
 
-        # convert them message to byte array
-        bytes_message = bytes([ord(c) for c in message_string])
+            # convert message length, device ID, and stack floor to bytes
+            bytes_message_length = len(message_string) & 0xFF
+            bytes_device_ID = device_id & 0xFF
+            bytes_stack_floor = stack_floor & 0xFF
 
-        # format the message, send over com port and collect response 
-        self.incubator_com.sendMsg(
-            bytes_message,
-            bytes_message_length,
-            bytes_device_ID,
-            bytes_stack_floor
-        )
+            # convert them message to byte array
+            bytes_message = bytes([ord(c) for c in message_string])
 
-        time.sleep(read_delay)
+            # format the message, send over com port and collect response 
+            self.incubator_com.sendMsg(
+                bytes_message,
+                bytes_message_length,
+                bytes_device_ID,
+                bytes_stack_floor
+            )
 
-        # Read COM port response
-        response = self.incubator_com.readCom()
-        formatted_response = self.format_response(response)
+            time.sleep(read_delay)
 
-        # TESTING
-        print(f"Message: {message_string}, com response: {formatted_response}")
+            # Read COM port response
+            response = self.incubator_com.readCom()
+            formatted_response = self.format_response(response)
 
-        return formatted_response
+            # TESTING
+            # print(f"Message: {message_string}, com response: {formatted_response}")
+
+            return formatted_response
 
 
     def format_response(self, response:str):
@@ -204,6 +242,14 @@ class Interface:
         formatted_response = formatted_response.replace("²", "")
         formatted_response = formatted_response.strip()
         return formatted_response
+
+    @property
+    def is_busy(self) -> bool:
+        """Returns True if incubator busy, False otherwise"""
+        if self.lock.locked():
+            return True
+        else:
+            return False
 
 
 if __name__ == "__main__":
@@ -273,15 +319,24 @@ if __name__ == "__main__":
     # com.disable_heater()
     # com.send_message("RHE")
 
-    com.set_target_temperature(300)
-    com.start_heater()
+    # com.set_target_temperature(300)
+    # com.start_heater()
 
-    com.set_shaker_parameters(frquency=100)
-    com.start_shaker("ND")  # allow shaking even if no labware detected
+    # com.set_shaker_parameters(frquency=100)
+    # com.start_shaker("ND")  # allow shaking even if no labware detected
 
-    time.sleep(10)
+    # time.sleep(10)
 
-    com.stop_shaker()
+    
+
+    # print(com.is_shaker_active())
+
+
+    # com.stop_shaker()
+
+    # time.sleep(3)
+
+    # print(com.is_shaker_active())
 
     com.close_connection()
 

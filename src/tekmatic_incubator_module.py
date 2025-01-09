@@ -5,7 +5,7 @@ REST-based node for Tekmatic Single Plate Incubators that interfaces with WEI
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 import time
-
+from typing import Optional
 from fastapi.datastructures import UploadFile
 from starlette.datastructures import State
 from typing_extensions import Annotated
@@ -25,7 +25,7 @@ from wei.types.step_types import (
 )
 from wei.utils import extract_version
 
-import tekmatic_incubator_interface 
+from tekmatic_incubator_interface import Interface
 
 rest_module = RESTModule(
     name="tekmatic_incubator_module",
@@ -51,26 +51,20 @@ rest_module.arg_parser.add_argument(
 # parse the arguments
 args = rest_module.arg_parser.parse_args()
 
-
 @rest_module.startup()
-def custom_startup_handler(state: State):
-    """
-    Initializes the tekmatic interface and opens the COM connection
-    """
-    state.tekmatic = tekmatic_incubator_interface.Interface()
+def tekmatic_startup(state: State):
+    """Initializes the tekmatic interface and opens the COM connection"""
+    state.tekmatic = None
+    state.tekmatic = Interface()
     state.tekmatic.initialize_device()  # TODO: is this necessary?
+    state.is_incubating_only = False
 
-
-# @rest_module.shutdown()
-# def custom_shutdown_handler(state: State):
-#     """
-#     Custom shutdown handler that is called whenever the module is shutdown.
-
-#     If this isn't provided, the default shutdown handler will be used, which will do nothing.
-#     """
-
-#     # del state.interface  # *Close device connection or do other cleanup, if needed
-
+@rest_module.shutdown()
+def tekmatic_shutdown(state: State):
+    """Handles cleaning up the tekmatic object"""
+    if state.tekmatic is not None:
+        state.tekmatic.close_connection()
+        del state.tekmatic
 
 # @rest_module.state_handler()
 # def custom_state_handler(state: State) -> ModuleState:
@@ -94,6 +88,39 @@ def custom_startup_handler(state: State):
 #             "difference": state.difference,
 #         }
 #     )
+
+@rest_module.state_handler()
+def tekmatic_state_handler(state: State) -> ModuleState:
+    """Returns the state of the Tekmatic device and module"""
+    tekmatic: Optional[Interface] = state.tekmatic
+
+    # TODO: add shaker speed (set). actual??
+    # TODO: add incubation time countdown
+
+    if tekmatic is None:
+        return ModuleState(
+            status=state.status,
+            error=state.error,
+        )
+
+    if not tekmatic.is_busy or (tekmatic.is_busy and state.is_incubating_only):
+        # query for fresh state details and save to cache
+        state.cached_current_shaker_active = tekmatic.is_shaker_active()
+        state.cached_current_heater_active = tekmatic.is_heater_active()
+        state.cached_current_actual_temperature = tekmatic.get_actual_temperature()
+        state.cached_current_target_temperature = tekmatic.get_target_temperature()
+
+    # if the shaker is actually busy, the previous cashed values will be returned
+    return ModuleState.model_validate(
+        {
+            "status": state.status,
+            "error": state.error,
+            "target_temp": state.cached_current_target_temperature,
+            "actual_temp": state.cached_current_actual_temperature,
+            "shaker_active": state.cached_current_shaker_active,
+            "heater_active": state.cached_current_heater_active,
+        }
+    )
 
 
 # OPEN TRAY ACTION
@@ -183,8 +210,9 @@ def incubate(
             print(f"Error in incuabte action: {e}")
             return StepResponse.step_failed(error="Failed to set temerature in incubate action")
 
-    if 66 <= shaker_frequency <= 300:
+    if 66 <= shaker_frequency_formatted <= 300:
         try:
+            print("Shaker if statement")
             state.tekmatic.set_shaker_parameters(frquency=shaker_frequency_formatted)
             state.tekmatic.start_shaker()
 
