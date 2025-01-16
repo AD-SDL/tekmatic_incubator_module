@@ -4,11 +4,6 @@ import clr
 import time
 import threading
 
-"""
-TODOs:
-- Handle the device returning '#' which I think means invalid command
-"""
-
 class Interface:
     """
     Basic interface for Tekmatic Single Plate Incubators
@@ -270,9 +265,15 @@ class Interface:
         Returns: 
             formatted_response: response from the Com port without extra characters
         """
+        # remove extra characters
         formatted_response = response.replace("`", "")
         formatted_response = formatted_response.replace("²", "")
         formatted_response = formatted_response.strip()
+
+        # check for '#' response meaning invalid command was sent
+        if formatted_response == "#": 
+            raise Exception("Erorr: invalid command sent, '#' response received")
+        
         return formatted_response
 
     @property

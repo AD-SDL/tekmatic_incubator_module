@@ -15,12 +15,6 @@ from wei.types.step_types import (
 )
 from tekmatic_incubator_interface import Interface
 
-"""TODOs: 
-
-- format incubator time remaining in state handler 
-- add all docstrings
-- figure out which layer to put variable checking in. """
-
 rest_module = RESTModule(
     name="tekmatic_incubator_module",
     version="0.0.1",
@@ -118,7 +112,7 @@ def close(
     state: State,
     action: ActionRequest,
 ) -> StepResponse:
-    """Opens the Tekmatic incubator tray"""
+    """Closes the Tekmatic incubator tray"""
 
     state.tekmatic.close_door()
     return StepResponse.step_succeeded()
@@ -126,7 +120,7 @@ def close(
 
 # SET TEMP ACTION
 @rest_module.action(
-    name="set_temp", description="Set target incubation temperature"
+    name="set_temperature", description="Set target incubation temperature"
 )
 def set_temperature(
     state: State,
@@ -134,7 +128,7 @@ def set_temperature(
     temperature: Annotated[float, "temperature in Celsius to one decimal point. 0.0 - 80.0 are valid inputs, 22.0 default"] = 22.0, # TODO: What happens if a user enters an integer
     activate: Annotated[bool, "(optional) turn on heating/cooling element, on = True, off = False"] = False,
 ) -> StepResponse:
-    """Sets the temperature on the tekmatic incubator, optionally turns on the heating element"""
+    """Sets the temperature on the Tekmatic incubator, optionally turns on the heating element"""
 
     try:
         response = state.tekmatic.set_target_temperature(float(temperature))  
@@ -212,8 +206,6 @@ def incubate(
 #****************#
 #*Admin Commands*#
 #****************#
-
-# TODO: Add support for admin commands, if desired
 
 """
 To add support for custom admin actions, uncomment one or more of the
