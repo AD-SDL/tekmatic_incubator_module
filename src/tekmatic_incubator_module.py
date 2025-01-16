@@ -1,31 +1,25 @@
 """
 REST-based node for Tekmatic Single Plate Incubators that interfaces with WEI
 """
-
-from pathlib import Path
-from tempfile import NamedTemporaryFile
 import time
 from typing import Optional
-from fastapi.datastructures import UploadFile
 from starlette.datastructures import State
 from typing_extensions import Annotated
 from wei.modules.rest_module import RESTModule
 from wei.types.module_types import (
-    LocalFileModuleActionResult,
-    ModuleAction,
-    ModuleActionArg,
     ModuleState,
-    ValueModuleActionResult,
 )
 from wei.types.step_types import (
     ActionRequest,
-    StepFileResponse,
     StepResponse,
-    StepStatus,
 )
-from wei.utils import extract_version
-
 from tekmatic_incubator_interface import Interface
+
+"""TODOs: 
+
+- format incubator time remaining in state handler 
+- add all docstrings
+- figure out which layer to put variable checking in. """
 
 rest_module = RESTModule(
     name="tekmatic_incubator_module",
@@ -56,8 +50,9 @@ def tekmatic_startup(state: State):
     """Initializes the tekmatic interface and opens the COM connection"""
     state.tekmatic = None
     state.tekmatic = Interface()
-    state.tekmatic.initialize_device()  # TODO: is this necessary?
+    state.tekmatic.initialize_device()  
     state.is_incubating_only = False
+    state.incubation_seconds_remaining = 0
 
 @rest_module.shutdown()
 def tekmatic_shutdown(state: State):
@@ -66,36 +61,10 @@ def tekmatic_shutdown(state: State):
         state.tekmatic.close_connection()
         del state.tekmatic
 
-# @rest_module.state_handler()
-# def custom_state_handler(state: State) -> ModuleState:
-#     """
-#     Custom state handler that is called whenever the modules state is requested via the REST API.
-
-#     If this isn't provided, the default state handler will be used, which will return the following:
-
-#     ModuleState(status=state.status, error=state.error)
-#     """
-
-#     # if state.interface:
-#         # state.interface.query_state(state)  # *Query the state of the device, if supported
-
-#     return ModuleState.model_validate(
-#         {
-#             "status": state.status,  # *Required, Dict[ModuleStatus, bool]
-#             "error": state.error, # * Optional, str
-#             # *Custom state fields
-#             "sum": state.sum,
-#             "difference": state.difference,
-#         }
-#     )
-
 @rest_module.state_handler()
 def tekmatic_state_handler(state: State) -> ModuleState:
     """Returns the state of the Tekmatic device and module"""
     tekmatic: Optional[Interface] = state.tekmatic
-
-    # TODO: add shaker speed (set). actual??
-    # TODO: add incubation time countdown
 
     if tekmatic is None:
         return ModuleState(
@@ -119,6 +88,7 @@ def tekmatic_state_handler(state: State) -> ModuleState:
             "actual_temp": state.cached_current_actual_temperature,
             "shaker_active": state.cached_current_shaker_active,
             "heater_active": state.cached_current_heater_active,
+            "incubation_seconds_remaining": state.incubator_seconds_remaining, 
         }
     )
 
@@ -133,9 +103,12 @@ def open(
 ) -> StepResponse:
     """Opens the Tekmatic incubator tray"""
 
-    state.tekmatic.disable_shaker()  # TODO: maybe check if the shaker is active before doing this action to save 5 seconds. 
+    # disable the shaker if shaking
+    if state.cached_current_shaker_active: 
+        state.tekmatic.disable_shaker()   
     state.tekmatic.open_door()
     return StepResponse.step_succeeded()
+
 
 # CLOSE TRAY ACTION
 @rest_module.action(
@@ -153,9 +126,9 @@ def close(
 
 # SET TEMP ACTION
 @rest_module.action(
-    name="set_temp", descriptionn="Set target incubation temperature"
+    name="set_temp", description="Set target incubation temperature"
 )
-def set_temp(
+def set_temperature(
     state: State,
     action: ActionRequest,
     temperature: Annotated[float, "temperature in Celsius to one decimal point. 0.0 - 80.0 are valid inputs, 22.0 default"] = 22.0, # TODO: What happens if a user enters an integer
@@ -163,24 +136,23 @@ def set_temp(
 ) -> StepResponse:
     """Sets the temperature on the tekmatic incubator, optionally turns on the heating element"""
 
-    # TODO: Check that this actualy sets the temp after adding temp and other information into the state
-
     try:
-        response = state.tekmatic.set_target_temperature(float(temperature))  # TODO: validate that the float has one decimal place? Necessary?
+        response = state.tekmatic.set_target_temperature(float(temperature))  
 
         if activate:
-            state.tekmatic.start_heater()  # TODO": should I be checking these too for a successful response?
+            state.tekmatic.start_heater()  
         else:
             state.tekmatic.stop_heater()
 
         if response == "":
             return StepResponse.step_succeeded()
         else:
-            return StepResponse.step_failed(error="Set temp action failed, unsucessful response")
+            return StepResponse.step_failed(error="Set temperature action failed, unsuccessful response")
 
     except Exception as e:
-        print(f"Error in set_temp action: {e}")
-        return StepResponse.step_failed(error="Set temp action failed")
+        print(f"Error in set_temperature action: {e}")
+        return StepResponse.step_failed(error="Set temperature action failed")
+
 
 # INCUBATE ACTION
 @rest_module.action(
@@ -196,42 +168,42 @@ def incubate(
 ) -> StepResponse:
     """Starts incubation at the specified temperature, optionally shakes, and optionally blocks all other actions until incubation complete"""
 
-    # format inputs
-    shaker_frequency_formatted = int(shaker_frequency * 10)  # TODO, either put all unit conversions in module or driver, not both like you have now.
-
     # set the temperature and activate heating
-    if 0 <= int(temperature*10) <= 800:
-        try:
-            state.tekmatic.set_target_temperature(temperature)
-            state.tekmatic.start_heater()
-            print(f"Incubation action: Temperature set to {temperature} deg C")
+    try:
+        state.tekmatic.set_target_temperature(temperature)
+        state.tekmatic.start_heater()
+    except Exception as e:
+        print(f"Error in incubate action: {e}")
+        return StepResponse.step_failed(error="Failed to set temperature in incubate action")
 
-        except Exception as e:
-            print(f"Error in incuabte action: {e}")
-            return StepResponse.step_failed(error="Failed to set temerature in incubate action")
-
-    if 66 <= shaker_frequency_formatted <= 300:
-        try:
-            print("Shaker if statement")
-            state.tekmatic.set_shaker_parameters(frquency=shaker_frequency_formatted)
-            state.tekmatic.start_shaker()
-
-            # TODO: wait a second then check that the shaker actually started? Add method ot check shaker status to interface
-            print(f"Incubate action: Shaker started at {shaker_frequency} Hz")
-
-        except Exception as e:
-            print(f"Error in incuabte action: {e}")
-            return StepResponse.step_failed(error="Failed to set shaker parameters or start shaking in incubate action")
+    try:
+        state.tekmatic.set_shaker_parameters(frequency=shaker_frequency)
+        state.tekmatic.start_shaker()
+    except Exception as e:
+        print(f"Error in incubate action: {e}")
+        return StepResponse.step_failed(error="Failed to set shaker parameters or start shaking in incubate action")
 
     if not wait_for_incubation_time:
         return StepResponse.step_succeeded()
     else:
-        print(f"Incubation action: Starting incubation for {incubation_time} seconds")
-        time.sleep(incubation_time)  # block until incubation time is complete
-        # TODO: print time left or time that incubation will stop somewhere? in the status?
+        incubation_seconds_completed = 0
+        total_incubation_seconds = None
+        if incubation_time: 
+            total_incubation_seconds = incubation_time
 
-        # stop shaking after incubation time complete?
-        state.tekmatic.stop_shaker()
+        print(f"Incubation action: Starting incubation for {incubation_time} seconds")
+
+        while incubation_seconds_completed < total_incubation_seconds:
+            time.sleep(1)
+            incubation_seconds_completed += 1
+            state.incubation_seconds_remaining = total_incubation_seconds - incubation_seconds_completed
+
+        # reset the incubation_time_remaining variable for next actions
+        state.incubation_seconds_remaining = 0
+
+        # stop shaking after incubation complete
+        state.tekmatic.stop_shaker()  
+
         print("Incubation action: Incubation complete")
 
         return StepResponse.step_succeeded()
