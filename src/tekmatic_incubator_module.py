@@ -1,241 +1,211 @@
 """
-REST-based node that interfaces with WEI and provides a simple Sleep(t) function
+REST-based node for Tekmatic Single Plate Incubators that interfaces with WEI
 """
-
-from pathlib import Path
-from tempfile import NamedTemporaryFile
-
-from fastapi.datastructures import UploadFile
+import time
+from typing import Optional
 from starlette.datastructures import State
 from typing_extensions import Annotated
 from wei.modules.rest_module import RESTModule
 from wei.types.module_types import (
-    LocalFileModuleActionResult,
-    ModuleAction,
-    ModuleActionArg,
     ModuleState,
-    ValueModuleActionResult,
 )
 from wei.types.step_types import (
     ActionRequest,
-    StepFileResponse,
     StepResponse,
-    StepStatus,
 )
-from wei.utils import extract_version
+from tekmatic_incubator_interface import Interface
 
-import tekmatic_incubator_interface as interface
-
-tekmatic_incubator_module = RESTModule(
+rest_module = RESTModule(
     name="tekmatic_incubator_module",
-    version=extract_version(Path(__file__).parent.parent / "pyproject.toml"),
-    description="TODO: Provide a description of your module here.",
-    model="TODO: specify the device model this module controls",
+    version="0.0.1",
+    description="A REST node to control Tekmatic Single Plate Incubators",
+    model="tekmatic",
 )
 
-#***********#
-#*Lifecycle*#
-#***********#
+# add arguments
+rest_module.arg_parser.add_argument(
+    "--dll_path", type=str, help="path to incubator control dll (ComLib.dll)", default="C:\\Program Files\\INHECO\\Incubator-Control\\ComLib.dll"
+)
+rest_module.arg_parser.add_argument(
+    "--device_id", type=int, help="device ID of the Tekmatic Incubator device ", default=2
+)
+rest_module.arg_parser.add_argument(
+    "--stack_floor", type=int, help="stack floor of the Tekmatic Incubator device", default=0
+)
+rest_module.arg_parser.add_argument(
+    "--device", type=str, help="Serial port for communicating with the device", default="COM5"
+)
 
-# TODO: Define any custom functionality needed to handle the startup, shutdown, and state of the device
-# * All of these functions are optional, and can be removed if not needed
+# parse the arguments
+args = rest_module.arg_parser.parse_args()
 
+@rest_module.startup()
+def tekmatic_startup(state: State):
+    """Initializes the tekmatic interface and opens the COM connection"""
+    state.tekmatic = None
+    state.tekmatic = Interface()
+    state.tekmatic.initialize_device()  
+    state.is_incubating_only = False
+    state.incubation_seconds_remaining = 0
 
-@tekmatic_incubator_module.startup()
-def custom_startup_handler(state: State):
-    """
-    Custom startup handler that is called whenever the module is started.
+@rest_module.shutdown()
+def tekmatic_shutdown(state: State):
+    """Handles cleaning up the tekmatic object"""
+    if state.tekmatic is not None:
+        state.tekmatic.close_connection()
+        del state.tekmatic
 
-    If this isn't provided, the default startup handler will be used, which will do nothing.
-    """
-    state.sum = 0
-    state.difference = 0
-    state.interface = None
+@rest_module.state_handler()
+def tekmatic_state_handler(state: State) -> ModuleState:
+    """Returns the state of the Tekmatic device and module"""
+    tekmatic: Optional[Interface] = state.tekmatic
 
-    # state.interface = interface.Interface()  # *Initialize the device, if needed
+    if tekmatic is None:
+        return ModuleState(
+            status=state.status,
+            error=state.error,
+        )
 
+    if not tekmatic.is_busy or (tekmatic.is_busy and state.is_incubating_only):
+        # query for fresh state details and save to cache
+        state.cached_current_shaker_active = tekmatic.is_shaker_active()
+        state.cached_current_heater_active = tekmatic.is_heater_active()
+        state.cached_current_actual_temperature = tekmatic.get_actual_temperature()
+        state.cached_current_target_temperature = tekmatic.get_target_temperature()
 
-@tekmatic_incubator_module.shutdown()
-def custom_shutdown_handler(state: State):
-    """
-    Custom shutdown handler that is called whenever the module is shutdown.
-
-    If this isn't provided, the default shutdown handler will be used, which will do nothing.
-    """
-
-    # del state.interface  # *Close device connection or do other cleanup, if needed
-
-
-@tekmatic_incubator_module.state_handler()
-def custom_state_handler(state: State) -> ModuleState:
-    """
-    Custom state handler that is called whenever the modules state is requested via the REST API.
-
-    If this isn't provided, the default state handler will be used, which will return the following:
-
-    ModuleState(status=state.status, error=state.error)
-    """
-
-    # if state.interface:
-        # state.interface.query_state(state)  # *Query the state of the device, if supported
-
+    # if the shaker is actually busy, the previous cashed values will be returned
     return ModuleState.model_validate(
         {
-            "status": state.status,  # *Required, Dict[ModuleStatus, bool]
-            "error": state.error, # * Optional, str
-            # *Custom state fields
-            "sum": state.sum,
-            "difference": state.difference,
+            "status": state.status,
+            "error": state.error,
+            "target_temp": state.cached_current_target_temperature,
+            "actual_temp": state.cached_current_actual_temperature,
+            "shaker_active": state.cached_current_shaker_active,
+            "heater_active": state.cached_current_heater_active,
+            "incubation_seconds_remaining": state.incubator_seconds_remaining, 
         }
     )
 
 
-#*********#
-#*Actions*#
-#*********#
-
-# TODO: Define functions to handle each action the device should be able to perform
-
-
-@tekmatic_incubator_module.action(
-    name="add",
-    description="An example action that adds two numbers together.",
-    #* Optionally, you can annotate the values returned by the action, if any
-    results=[
-        ValueModuleActionResult(
-            label="sum",
-            description="The sum of a and b"
-        )
-    ]
+# OPEN TRAY ACTION
+@rest_module.action(
+    name="open", description="Open the plate tray"
 )
-def add(
-    a: Annotated[float, "First number to add"],
-    b: Annotated[float, "Second number to add"],
-    state: State,  # *This is an optional argument that can be used to access the current state of the module
+def open(
+    state: State,
+    action: ActionRequest,
 ) -> StepResponse:
-    """
-    Add two numbers together
+    """Opens the Tekmatic incubator tray"""
 
-    Example workflow step yaml:
-
-    - name: Add on tekmatic_incubator
-      module: tekmatic_incubator
-      action: add
-      args:
-        a: 5
-        b: 7
-    """
-
-    state.sum = a + b
-
-    return StepResponse.step_succeeded(data={"sum": state.sum})
-
-
-# * If you don't specify a name or description, the function name and docstring will be used
-@tekmatic_incubator_module.action(
-    results=[
-        ValueModuleActionResult(
-            label="difference",
-            description="The difference between a and b (and optionally c)"
-        )
-    ]
-)
-def subtract(
-    a: Annotated[float, "First number to subtract from"],
-    b: Annotated[float, "Second number to subtract"],
-    action: ActionRequest,  # *This is an optional argument that can be used to access the entire action request
-    state: State,  # *This is an optional argument that can be used to access the current state of the module
-) -> StepResponse:
-    """
-    Subtract two numbers
-
-    Example workflow step yaml:
-
-    - name: Subtract on tekmatic_incubator
-      module: tekmatic_incubator
-      action: subtract
-      args:
-        a: 12
-        b: 10
-    """
-
-    state.difference = (
-        action.args["a"] - action.args["b"]
-    )  # *This is equivalent to `state.difference = a - b`
-    state.difference -= action.args.get(
-        "c", 0
-    )  # * You can also use get to provide a default value
-
-    return StepResponse.step_succeeded(data={"difference": state.difference})
-
-
-@tekmatic_incubator_module.action(
-    name="run_protocol",
-    description="Run a protocol file",
-    results=[
-        LocalFileModuleActionResult(
-            label="output_file",
-            description="The output file from the protocol",
-        )
-    ]
-)
-def run_protocol(
-    protocol: Annotated[UploadFile, "Protocol file to run"],
-) -> StepFileResponse:
-    """
-    Run a protocol file
-
-    Example workflow step yaml:
-
-    - name: Run protocol on tekmatic_incubator
-      module: tekmatic_incubator
-      action: run_protocol
-      files:
-        protocol: path/to/protocol/file
-    """
-    # *Save the protocol file to a temporary location
-    with NamedTemporaryFile() as f:
-        f.write(protocol.file.read())
-        f.seek(0)
-
-        # *Run protocol file
-        interface.run_protocol(Path(f.name))
-
-    output_file = Path("path/to/output/file")
-
-    return StepFileResponse(
-        status=StepStatus.SUCCEEDED,
-        files={
-            "output_file": output_file,
-        },
-    )
-
-
-# * If you don't want to/can't use the decorator, you can also add actions like this:
-def print_func(output: str) -> StepResponse:
-    """
-    Print a message
-    """
-    print(output)
+    # disable the shaker if shaking
+    if state.cached_current_shaker_active: 
+        state.tekmatic.disable_shaker()   
+    state.tekmatic.open_door()
     return StepResponse.step_succeeded()
 
 
-tekmatic_incubator_module.actions.append(
-    ModuleAction(
-        name="print",
-        description="A simple print action",
-        function=print_func,
-        args=[
-            ModuleActionArg(name="output", type="str", description="Message to print")
-        ],
-    )
+# CLOSE TRAY ACTION
+@rest_module.action(
+    name="close", description="Close the plate tray"
 )
+def close(
+    state: State,
+    action: ActionRequest,
+) -> StepResponse:
+    """Closes the Tekmatic incubator tray"""
+
+    state.tekmatic.close_door()
+    return StepResponse.step_succeeded()
+
+
+# SET TEMP ACTION
+@rest_module.action(
+    name="set_temperature", description="Set target incubation temperature"
+)
+def set_temperature(
+    state: State,
+    action: ActionRequest,
+    temperature: Annotated[float, "temperature in Celsius to one decimal point. 0.0 - 80.0 are valid inputs, 22.0 default"] = 22.0, # TODO: What happens if a user enters an integer
+    activate: Annotated[bool, "(optional) turn on heating/cooling element, on = True, off = False"] = False,
+) -> StepResponse:
+    """Sets the temperature on the Tekmatic incubator, optionally turns on the heating element"""
+
+    try:
+        response = state.tekmatic.set_target_temperature(float(temperature))  
+
+        if activate:
+            state.tekmatic.start_heater()  
+        else:
+            state.tekmatic.stop_heater()
+
+        if response == "":
+            return StepResponse.step_succeeded()
+        else:
+            return StepResponse.step_failed(error="Set temperature action failed, unsuccessful response")
+
+    except Exception as e:
+        print(f"Error in set_temperature action: {e}")
+        return StepResponse.step_failed(error="Set temperature action failed")
+
+
+# INCUBATE ACTION
+@rest_module.action(
+    name="incubate", description="Start incubation with optional shaking"
+)
+def incubate(
+    state:State,
+    action: ActionRequest,
+    temperature: Annotated[float, "temperature in celsius to one decimal point. 0.0 - 80.0 are valid inputs, 22.0 default"] = 22.0, # TODO: What happens if a user enters an integer
+    shaker_frequency: Annotated[float, "shaker frequency in Hz (1Hz = 60rpm). 6.6-30.0 are valid inputs, default is 14.2 Hz"] = 14.2,
+    wait_for_incubation_time: Annotated[bool, "True if action should block until the specified incubation time has passes, False to continue immediately after starting the incubation"] = False,
+    incubation_time: Annotated[int, "Time to incubate in seconds"] = None,
+) -> StepResponse:
+    """Starts incubation at the specified temperature, optionally shakes, and optionally blocks all other actions until incubation complete"""
+
+    # set the temperature and activate heating
+    try:
+        state.tekmatic.set_target_temperature(temperature)
+        state.tekmatic.start_heater()
+    except Exception as e:
+        print(f"Error in incubate action: {e}")
+        return StepResponse.step_failed(error="Failed to set temperature in incubate action")
+
+    try:
+        state.tekmatic.set_shaker_parameters(frequency=shaker_frequency)
+        state.tekmatic.start_shaker()
+    except Exception as e:
+        print(f"Error in incubate action: {e}")
+        return StepResponse.step_failed(error="Failed to set shaker parameters or start shaking in incubate action")
+
+    if not wait_for_incubation_time:
+        return StepResponse.step_succeeded()
+    else:
+        incubation_seconds_completed = 0
+        total_incubation_seconds = None
+        if incubation_time: 
+            total_incubation_seconds = incubation_time
+
+        print(f"Incubation action: Starting incubation for {incubation_time} seconds")
+
+        while incubation_seconds_completed < total_incubation_seconds:
+            time.sleep(1)
+            incubation_seconds_completed += 1
+            state.incubation_seconds_remaining = total_incubation_seconds - incubation_seconds_completed
+
+        # reset the incubation_time_remaining variable for next actions
+        state.incubation_seconds_remaining = 0
+
+        # stop shaking after incubation complete
+        state.tekmatic.stop_shaker()  
+
+        print("Incubation action: Incubation complete")
+
+        return StepResponse.step_succeeded()
+
 
 #****************#
 #*Admin Commands*#
 #****************#
-
-# TODO: Add support for admin commands, if desired
 
 """
 To add support for custom admin actions, uncomment one or more of the
@@ -282,4 +252,4 @@ By default, a module supports SHUTDOWN, RESET, LOCK, and UNLOCK modules. This ca
 
 # *This runs the arg_parser, startup lifecycle method, and starts the REST server
 if __name__ == "__main__":
-    tekmatic_incubator_module.start()
+    rest_module.start()
