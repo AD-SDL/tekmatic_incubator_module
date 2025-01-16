@@ -6,7 +6,7 @@ Contains a tekmatic incubator interface (tekmatic_incubator_interface.py) and Te
 
 ### Installation
 
-Tekmatic incubators run on Windows systems. See device documentation on system requirments for more details.
+Tekmatic incubators run on Windows systems. See device documentation on system requirements for more details.
 
 Before using the Tekmatic Incubator, you will need to clone the module GitHub repo and install the dependencies. Use the code below to complete this step. 
 

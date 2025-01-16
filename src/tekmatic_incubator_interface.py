@@ -272,7 +272,7 @@ class Interface:
 
         # check for '#' response meaning invalid command was sent
         if formatted_response == "#": 
-            raise Exception("Erorr: invalid command sent, '#' response received")
+            raise Exception("Error: invalid command sent, '#' response received")
         
         return formatted_response
 
