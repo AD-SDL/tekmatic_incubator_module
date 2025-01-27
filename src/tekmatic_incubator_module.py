@@ -82,7 +82,7 @@ def tekmatic_state_handler(state: State) -> ModuleState:
             "actual_temp": state.cached_current_actual_temperature,
             "shaker_active": state.cached_current_shaker_active,
             "heater_active": state.cached_current_heater_active,
-            "incubation_seconds_remaining": state.incubator_seconds_remaining, 
+            "incubation_seconds_remaining": state.incubation_seconds_remaining, 
         }
     )
 
