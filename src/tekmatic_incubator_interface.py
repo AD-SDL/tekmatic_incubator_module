@@ -112,11 +112,11 @@ class Interface:
     # DOOR ACTIONS 
     def open_door(self):
         """Opens the door"""
-        self.send_message("AOD", read_delay=5) # wait 5 seconds for door to open before reading com response
+        self.send_message("AOD", read_delay=6) # wait 6 seconds for door to open before reading com response
 
     def close_door(self):
         """Closes the door"""
-        self.send_message("ACD", read_delay=5) # wait 5 seconds for door to close before reading com response
+        self.send_message("ACD", read_delay=7) # wait 7 seconds for door to close before reading com response
 
     def report_door_status(self):
         """Determines if front incubator door is open. 
@@ -151,9 +151,9 @@ class Interface:
             None
         """
         if status in [1,"ND"]:
-            self.send_message("ASE" + str(status), read_delay=2)
+            self.send_message("ASE" + str(status), read_delay=3)
         else:
-            print("Error: invalid status in enable_shaker method")
+            raise ValueError("Error: invalid status in enable_shaker method")
 
     def stop_shaker(self):
         """Disables the device shaking element"""

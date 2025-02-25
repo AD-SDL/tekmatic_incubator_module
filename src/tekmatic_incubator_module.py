@@ -14,6 +14,7 @@ from wei.types.step_types import (
     StepResponse,
 )
 from tekmatic_incubator_interface import Interface
+import traceback
 
 rest_module = RESTModule(
     name="tekmatic_incubator_module",
@@ -175,7 +176,7 @@ def incubate(
         state.tekmatic.start_shaker()
     except Exception as e:
         print(f"Error in incubate action: {e}")
-        return StepResponse.step_failed(error="Failed to set shaker parameters or start shaking in incubate action")
+        return StepResponse.step_failed(error=f"Failed to set shaker parameters or start shaking in incubate action: {traceback.format_exc()}")
 
     if not wait_for_incubation_time:
         return StepResponse.step_succeeded()
