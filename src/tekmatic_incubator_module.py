@@ -51,7 +51,7 @@ def tekmatic_startup(state: State):
 
 @rest_module.shutdown()
 def tekmatic_shutdown(state: State):
-    """Handles cleaning up the tekmatic object"""
+    """Handles cleaning up the tekmatic object. This is also an admin action"""
     if state.tekmatic is not None:
         state.tekmatic.close_connection()
         del state.tekmatic
@@ -126,10 +126,10 @@ def close(
 def set_temperature(
     state: State,
     action: ActionRequest,
-    temperature: Annotated[float, "temperature in Celsius to one decimal point. 0.0 - 80.0 are valid inputs, 22.0 default"] = 22.0, # TODO: What happens if a user enters an integer
+    temperature: Annotated[float, "temperature in Celsius to one decimal point. 0.0 - 80.0 are valid inputs, 22.0 default"] = 22.0, 
     activate: Annotated[bool, "(optional) turn on heating/cooling element, on = True, off = False"] = False,
 ) -> StepResponse:
-    """Sets the temperature on the Tekmatic incubator, optionally turns on the heating element"""
+    """TODO: Better description. Sets the temperature on the Tekmatic incubator, optionally turns on the heating element"""
 
     try:
         response = state.tekmatic.set_target_temperature(float(temperature))  
@@ -156,9 +156,9 @@ def set_temperature(
 def incubate(
     state:State,
     action: ActionRequest,
-    temperature: Annotated[float, "temperature in celsius to one decimal point. 0.0 - 80.0 are valid inputs, 22.0 default"] = 22.0, # TODO: What happens if a user enters an integer
+    temperature: Annotated[float, "temperature in celsius to one decimal point. 0.0 - 80.0 are valid inputs, 22.0 default"] = 22.0, 
     shaker_frequency: Annotated[float, "shaker frequency in Hz (1Hz = 60rpm). 6.6-30.0 are valid inputs, default is 14.2 Hz"] = 14.2,
-    wait_for_incubation_time: Annotated[bool, "True if action should block until the specified incubation time has passes, False to continue immediately after starting the incubation"] = False,
+    wait_for_incubation_time: Annotated[bool, "True if action should block until the specified incubation time has passed, False to continue immediately after starting the incubation"] = False,
     incubation_time: Annotated[int, "Time to incubate in seconds"] = None,
 ) -> StepResponse:
     """Starts incubation at the specified temperature, optionally shakes, and optionally blocks all other actions until incubation complete"""
@@ -214,41 +214,30 @@ functions below.
 By default, a module supports SHUTDOWN, RESET, LOCK, and UNLOCK modules. This can be overridden by using the decorators below, or setting a custom Set for python_rest_module.admin_commands
 """
 
-# @tekmatic_incubator_module.pause
+# @tekmatic_incubator_module.pause    # TODO: implement
 # def pause(state: State):
 #     """Support pausing actions on this module"""
 #     pass
 
-# @tekmatic_incubator_module.resume
+# @tekmatic_incubator_module.resume    # TODO: implement
 # def resume(state: State):
 #     """Support resuming actions on this module"""
 #     pass
 
-# @tekmatic_incubator_module.cancel
+# @rest_module.cancel   # TODO: implement
 # def cancel(state: State):
 #     """Support cancelling actions on this module"""
 #     pass
 
-# @tekmatic_incubator_module.lock
-# def lock(state: State):
-#     """Support locking the module to prevent new actions from being accepted"""
-#     pass
+# default LOCK and UNLOCK actions are sufficient
 
-# @tekmatic_incubator_module.unlock
-# def unlock(state: State):
-#     """Support unlocking the module to allow new actions to be accepted"""
-#     pass
-
-# @tekmatic_incubator_module.reset
-# def reset(state: State):
-#     """Support resetting the module.
-#     This should clear errors and reconnect to/reinitialize the device, if possible"""
-#     pass
-
-# @tekmatic_incubator_module.shutdown
-# def shutdown(state: State):
-#     """Support shutting down the module"""
-#     pass
+@rest_module.reset
+def reset(state: State):
+    """Support resetting the module.
+    This should clear errors and reconnect to/reinitialize the device, if possible"""
+    # TODO: test
+    state.tekmatic.reset_device()
+    state.tekmatic.initialize()
 
 
 # *This runs the arg_parser, startup lifecycle method, and starts the REST server

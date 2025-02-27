@@ -1,0 +1,37 @@
+name: Demonstrate Tekmatic incubator actions
+
+metadata:
+  author: Casey Stone
+  info: Workflow for demonstrating the tekmatic incubator actions
+  version: 0.1
+
+flowdef:
+  - name: open tekmatic
+    module: tekmatic
+    action: open
+
+  - name: close tekmatic
+    module: tekmatic
+    action: close
+
+  - name: set temperature
+    module: tekmatic
+    action: set_temperature
+    args:
+      temperature: 30.0
+
+  - name: start 60 second incubation, block until finished
+    module: tekmatic
+    action: incubate
+    args: 
+      temperature: 30.0
+      shaker_frequency: 10
+      wait_for_incubation_time: True
+      incubation_time: 60
+
+  - name: start continuous incubation, non-blocking
+    module: tekmatic
+    action: incubate
+    args: 
+      temperature: 30.0
+      shaker_frequency: 10
