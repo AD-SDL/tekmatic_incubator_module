@@ -268,13 +268,13 @@ By default, a module supports SHUTDOWN, RESET, LOCK, and UNLOCK modules. This ca
 # default LOCK and UNLOCK actions are sufficient
 
 
-@rest_module.reset
-def reset(state: State):
-    """Support resetting the module.
-    This should clear errors and reconnect to/reinitialize the device, if possible"""
-    # TODO: test
-    state.tekmatic.reset_device()
-    state.tekmatic.initialize()
+# @rest_module.reset
+# def reset(state: State):
+#     """Support resetting the module.
+#     This should clear errors and reconnect to/reinitialize the device, if possible"""
+#     # TODO: test
+#     state.tekmatic.reset_device()
+#     state.tekmatic.initialize()
 
 
 # *This runs the arg_parser, startup lifecycle method, and starts the REST server
