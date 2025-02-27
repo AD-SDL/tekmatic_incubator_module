@@ -1,5 +1,10 @@
-import tekmatic_incubator_interface
+"""
+Example file to demonstrate usage of the tekmatic incubator interface through python"
+"""
+
 import time
+
+import tekmatic_incubator_interface
 
 tekmatic_device = tekmatic_incubator_interface.Interface()
 # you can also specify dll path and Com port like this...

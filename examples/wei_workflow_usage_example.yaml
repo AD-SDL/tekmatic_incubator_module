@@ -23,7 +23,7 @@ flowdef:
   - name: start 60 second incubation, block until finished
     module: tekmatic
     action: incubate
-    args: 
+    args:
       temperature: 30.0
       shaker_frequency: 10
       wait_for_incubation_time: True
@@ -32,6 +32,6 @@ flowdef:
   - name: start continuous incubation, non-blocking
     module: tekmatic
     action: incubate
-    args: 
+    args:
       temperature: 30.0
       shaker_frequency: 10
