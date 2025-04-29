@@ -1,14 +1,14 @@
-# Inheco Single Plate Incubator Shaker module
+# Inheco Single Plate Incubator Shaker Module
 
-A WEI-powered module for controlling Inheco Single Plate IncubatorShakers.
+A WEI-powered module for controlling Inheco Single Plate Incubator Shakers.
 
-Contains an Inheco incubator interface (inheco_incubator_interface.py) and Inheco Incubator REST node (inheco_incubator_module.py).
+Contains an Inheco incubator interface (inheco_incubator_interface.py) and Inheco incubator REST node (inheco_incubator_module.py).
 
 ### Installation
 
 Inheco incubators run on Windows systems. See device documentation on system requirements for more details.
 
-Before using the Inheco Incubator, you will need to clone the module GitHub repo and install the dependencies. Use the code below to complete this step.
+Before using the Inheco incubator, you will need to clone the module GitHub repo and install the dependencies. Use the code below to complete this step.
 
 General install instructions:
 
@@ -24,7 +24,7 @@ General install instructions:
 
 This will print "Inheco incubator device connected and initialized" if the interface is able to connect correctly to the device.
 
-You can also use this python interface in other programs. The link below shows an example python program which uses the inheco interface to demonstrate all functions available in the interface.
+You can also use this Python interface in other programs. The link below shows an example Python program which uses the Inheco interface to demonstrate all functions available in the interface.
 
 [Example interface usage](https://github.com/AD-SDL/inheco_incubator_module/blob/main/examples/interface_usage_example.py)
 
