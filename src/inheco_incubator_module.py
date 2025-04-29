@@ -1,7 +1,8 @@
 """
-REST-based node for Tekmatic Single Plate Incubators that interfaces with WEI
+REST-based node for Inheco Single Plate Incubators that interfaces with WEI
 """
 
+import logging
 import time
 import traceback
 from typing import Optional
@@ -17,13 +18,17 @@ from wei.types.step_types import (
     StepResponse,
 )
 
-from tekmatic_incubator_interface import Interface
+from inheco_incubator_interface import Interface
 
+# create logger
+logger = logging.getLogger(__name__)
+
+# create rest module
 rest_module = RESTModule(
-    name="tekmatic_incubator_module",
+    name="inheco_incubator_module",
     version="0.0.1",
-    description="A REST node to control Tekmatic Single Plate Incubators",
-    model="tekmatic",
+    description="A REST node to control Inheco Single Plate Incubators",
+    model="inheco",
 )
 
 # add arguments
@@ -36,13 +41,13 @@ rest_module.arg_parser.add_argument(
 rest_module.arg_parser.add_argument(
     "--device_id",
     type=int,
-    help="device ID of the Tekmatic Incubator device ",
+    help="device ID of the Inheco Incubator device ",
     default=2,
 )
 rest_module.arg_parser.add_argument(
     "--stack_floor",
     type=int,
-    help="stack floor of the Tekmatic Incubator device",
+    help="stack floor of the Inheco Incubator device",
     default=0,
 )
 rest_module.arg_parser.add_argument(
@@ -55,42 +60,52 @@ rest_module.arg_parser.add_argument(
 # parse the arguments
 args = rest_module.arg_parser.parse_args()
 
+# format logging file based on device id
+logging.basicConfig(
+    filename=f"inheco_deviceID{args.device_id}.log",
+    level=logging.DEBUG,
+    format='%(asctime)s %(levelname)s %(name)s %(message)s')
 
 @rest_module.startup()
-def tekmatic_startup(state: State):
-    """Initializes the tekmatic interface and opens the COM connection"""
-    state.tekmatic = None
-    state.tekmatic = Interface()
-    state.tekmatic.initialize_device()
+def inheco_startup(state: State):
+    """Initializes the inheco interface and opens the COM connection"""
+    logger.info("startup called")
+    state.incubator = None
+    state.incubator = Interface()
+    state.incubator.initialize_device()
     state.is_incubating_only = False
     state.incubation_seconds_remaining = 0
-
+    logger.info("startup complete")
 
 @rest_module.shutdown()
-def tekmatic_shutdown(state: State):
-    """Handles cleaning up the tekmatic object. This is also an admin action"""
-    if state.tekmatic is not None:
-        state.tekmatic.close_connection()
-        del state.tekmatic
-
+def inheco_shutdown(state: State):
+    """Handles cleaning up the incubaotr object. This is also an admin action"""
+    logger.info("shutdown called")
+    if state.incubator is not None:
+        state.incubator.close_connection()
+        del state.incubator
+    logger.info("shutdown complete")
 
 @rest_module.state_handler()
-def tekmatic_state_handler(state: State) -> ModuleState:
-    """Returns the state of the Tekmatic device and module"""
-    tekmatic: Optional[Interface] = state.tekmatic
+def inheco_state_handler(state: State) -> ModuleState:
+    """Returns the state of the Inheco device and module"""
+    incubator: Optional[Interface] = state.incubator
 
-    if tekmatic is None:
+    if incubator is None:
         return ModuleState(
             status=state.status,
             error=state.error,
         )
 
-    if not tekmatic.is_busy or (tekmatic.is_busy and state.is_incubating_only):
+    if not incubator.is_busy or (incubator.is_busy and state.is_incubating_only):
         # query for fresh state details and save to cache
-        state.cached_current_shaker_active = tekmatic.is_shaker_active()
-        state.cached_current_heater_active = tekmatic.is_heater_active()
-        state.cached_current_actual_temperature = tekmatic.get_actual_temperature()
-        state.cached_current_target_temperature = tekmatic.get_target_temperature()
+        logger.debug("querying fresh state")
+        state.cached_current_shaker_active = incubator.is_shaker_active()
+        state.cached_current_heater_active = incubator.is_heater_active()
+        state.cached_current_actual_temperature = incubator.get_actual_temperature()
+        state.cached_current_target_temperature = incubator.get_target_temperature()
+    else:
+        logger.debug("using cached state")
 
     # if the shaker is actually busy, the previous cashed values will be returned
     return ModuleState.model_validate(
@@ -112,12 +127,14 @@ def open(
     state: State,
     action: ActionRequest,
 ) -> StepResponse:
-    """Opens the Tekmatic incubator tray"""
+    """Opens the Inheco incubator tray"""
 
     # disable the shaker if shaking
+    logger.info("open called")
     if state.cached_current_shaker_active:
-        state.tekmatic.disable_shaker()
-    state.tekmatic.open_door()
+        state.incubator.disable_shaker()
+    state.incubator.open_door()
+    logger.info("open complete")
     return StepResponse.step_succeeded()
 
 
@@ -129,7 +146,9 @@ def close(
 ) -> StepResponse:
     """Closes the Tekmatic incubator tray"""
 
-    state.tekmatic.close_door()
+    logger.info("close called")
+    state.incubator.close_door()
+    logger.info("close complete")
     return StepResponse.step_succeeded()
 
 
@@ -145,27 +164,32 @@ def set_temperature(
         "temperature in Celsius to one decimal point. 0.0 - 80.0 are valid inputs, 22.0 default",
     ] = 22.0,
     activate: Annotated[
-        bool, "(optional) turn on heating/cooling element, on = True, off = False"
-    ] = False,
+        bool, "(optional) turn on heating/cooling element, on = True (default), off = False"
+    ] = True,
 ) -> StepResponse:
-    """TODO: Better description. Sets the temperature on the Tekmatic incubator, optionally turns on the heating element"""
+    """Sets the temperature in Celsius on the Tekmatic incubator. If activate is set to False, heating element will turn off """
 
+    logger.info("set temperature called")
     try:
-        response = state.tekmatic.set_target_temperature(float(temperature))
+        response = state.incubator.set_target_temperature(float(temperature))
 
         if activate:
-            state.tekmatic.start_heater()
+            state.incubator.start_heater()
         else:
-            state.tekmatic.stop_heater()
+            state.incubator.stop_heater()
 
         if response == "":
+            logger.info("set temperature complete")
             return StepResponse.step_succeeded()
         else:
+            logger.error(f"Set temperature action failed, unsuccessful response: {response}")
             return StepResponse.step_failed(
-                error="Set temperature action failed, unsuccessful response"
+                error=f"Set temperature action failed, unsuccessful response: {response}"
             )
 
     except Exception as e:
+        logger.error(f"Error in set_temperature action: {e}")
+        logger.error(traceback.format_exc())
         print(f"Error in set_temperature action: {e}")
         return StepResponse.step_failed(error="Set temperature action failed")
 
@@ -183,7 +207,7 @@ def incubate(
     ] = 22.0,
     shaker_frequency: Annotated[
         float,
-        "shaker frequency in Hz (1Hz = 60rpm). 6.6-30.0 are valid inputs, default is 14.2 Hz",
+        "shaker frequency in Hz (1Hz = 60rpm). 0 (no shaking) and 6.6-30.0 are valid inputs, default is 14.2 Hz",
     ] = 14.2,
     wait_for_incubation_time: Annotated[
         bool,
@@ -193,28 +217,38 @@ def incubate(
 ) -> StepResponse:
     """Starts incubation at the specified temperature, optionally shakes, and optionally blocks all other actions until incubation complete"""
 
+    logger.info("incubate called")
     # set the temperature and activate heating
     try:
-        state.tekmatic.set_target_temperature(temperature)
-        state.tekmatic.start_heater()
+        state.incubator.set_target_temperature(temperature)
+        state.incubator.start_heater()
+        logger.info("heater set and started")
     except Exception as e:
-        print(f"Error in incubate action: {e}")
+        logger.error(f"Error starting heater in incubate action: {e}")
+        logger.error(traceback.format_exc())
+        print(f"Error starting heater in incubate action: {e}")
         return StepResponse.step_failed(
             error="Failed to set temperature in incubate action"
         )
 
     try:
-        state.tekmatic.set_shaker_parameters(frequency=shaker_frequency)
-        state.tekmatic.start_shaker()
+        if not shaker_frequency == 0:   # don't start the shaker if user sets shaker frequency to 0
+            state.incubator.set_shaker_parameters(frequency=shaker_frequency)
+            state.incubator.start_shaker()
+            logger.info("shaker set and started")
     except Exception as e:
-        print(f"Error in incubate action: {e}")
+        logger.error(f"Error starting shaker in incubate action: {e}")
+        logger.error(traceback.format_exc())
+        print(f"Error starting shaker in incubate action: {e}")
         return StepResponse.step_failed(
             error=f"Failed to set shaker parameters or start shaking in incubate action: {traceback.format_exc()}"
         )
 
     if not wait_for_incubation_time:
+        logger.info("incubate call complete - not waiting for incubation time")
         return StepResponse.step_succeeded()
     else:
+        logger.info("incubation call - waiting for incubation time to finish")
         incubation_seconds_completed = 0
         total_incubation_seconds = None
         if incubation_time:
@@ -228,15 +262,17 @@ def incubate(
             state.incubation_seconds_remaining = (
                 total_incubation_seconds - incubation_seconds_completed
             )
+        logger.info("incubation time complete")
 
         # reset the incubation_time_remaining variable for next actions
         state.incubation_seconds_remaining = 0
 
         # stop shaking after incubation complete
-        state.tekmatic.stop_shaker()
+        state.incubator.stop_shaker()
 
         print("Incubation action: Incubation complete")
 
+        logger.info("incubation completes")
         return StepResponse.step_succeeded()
 
 
@@ -250,12 +286,12 @@ functions below.
 By default, a module supports SHUTDOWN, RESET, LOCK, and UNLOCK modules. This can be overridden by using the decorators below, or setting a custom Set for python_rest_module.admin_commands
 """
 
-# @tekmatic_incubator_module.pause    # TODO: implement
+# @rest_module.pause    # TODO: implement
 # def pause(state: State):
 #     """Support pausing actions on this module"""
 #     pass
 
-# @tekmatic_incubator_module.resume    # TODO: implement
+# @rest_module.resume    # TODO: implement
 # def resume(state: State):
 #     """Support resuming actions on this module"""
 #     pass
@@ -265,16 +301,14 @@ By default, a module supports SHUTDOWN, RESET, LOCK, and UNLOCK modules. This ca
 #     """Support cancelling actions on this module"""
 #     pass
 
-# default LOCK and UNLOCK actions are sufficient
-
-
-# @rest_module.reset
+# @rest_module.reset    # TODO: implement
 # def reset(state: State):
 #     """Support resetting the module.
 #     This should clear errors and reconnect to/reinitialize the device, if possible"""
-#     # TODO: test
 #     state.tekmatic.reset_device()
 #     state.tekmatic.initialize()
+
+# default LOCK and UNLOCK actions are sufficient
 
 
 # *This runs the arg_parser, startup lifecycle method, and starts the REST server

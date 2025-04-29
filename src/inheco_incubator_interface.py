@@ -1,14 +1,16 @@
-"""Interface for controlling the Tekmatic Single Plate Incubator device."""
+"""Interface for controlling the Inheco Single Plate Incubator Shaker device."""
 
+import logging
 import threading
 import time
+import traceback
 
 import clr
 
 
 class Interface:
     """
-    Basic interface for Tekmatic Single Plate Incubators
+    Basic interface for Inheco Single Plate Incubator Shakers
     """
 
     def __init__(
@@ -17,6 +19,9 @@ class Interface:
         port="COM5",
     ):
         """Initializes and opens the connection to the incubator"""
+
+        # set up logger
+        self.logger = logging.getLogger(__name__)
 
         self.lock = threading.Lock()
         clr.AddReference(dll_path)
@@ -31,30 +36,35 @@ class Interface:
         with self.lock:
             response = self.incubator_com.openCom(port)
             if response == 77:
+                self.logger.info("Com connection opened successfully")
                 print("Com connection opened successfully")
             else:
                 # response 170 means failed
-                raise Exception("Failed to open Tekmatic Com connection")
+                self.logger.error("Failed to open the Inheco incubator Com connection")
+                raise Exception("Failed to open Inheco incubator Com connection")
             return response
 
     def close_connection(self):
         """Closes any existing open connection, no response expected on success or fail"""
         with self.lock:
             self.incubator_com.closeCom()
+            self.logger.info("Com connection closed")
             print("Com connection closed")
 
     def initialize_device(self):
-        """Initializes the Tekmatic Single Plate Incubator Device through the open connection."""
+        """Initializes the Inheco Single Plate Incubator Shaker Device through the open connection."""
         self.send_message("AID", read_delay=3)
-        print("Tekmatic incubator initialized")
+        self.logger.info("Inheco incubator initialized")
+        print("Inheco incubator initialized")
 
     def reset_device(self):
-        """Resets the Tekmatic Single Plate Incubator Device
+        """Resets the Inheco Single Plate Incubator Device
         Note: seems to respond 88 regardless of success or failure
         """
         response = self.send_message(
             "SRS", read_delay=5
         )  # wait 5 seconds for device to reset before reading response
+        self.logger.info("device reset")
         print("device reset")
         return response
 
@@ -64,6 +74,7 @@ class Interface:
             0 = no errors
         """
         response = self.send_message("REF")
+        self.logger.debug(f"error flags response: {response}")
         return response
 
     # TEMPERATURE CONTROL
@@ -72,34 +83,41 @@ class Interface:
         Note: There are two other sensors that we don't report. Get their values with "RAT2" and "RAT3" """
         response = self.send_message("RAT")
         temperature = float(response) / 10
+        self.logger.info(f"get actual temperature: {temperature}")
         return temperature
 
     def get_target_temperature(self):
         """Returns the set target temperature of the incubator"""
         response = self.send_message("RTT")
         temperature = float(response) / 10
+        self.logger.info(f"get target temperature: {temperature}")
         return temperature
 
     def set_target_temperature(self, temperature: float = 22.0):
         """Sets the target temperature, if no temperature specified, defaults to 22 deg C"""
         if 0 <= (int(temperature * 10)) <= 800:
+            self.logger.info("setting target temperature")
             message = "STT" + str(int(temperature * 10))
             response = self.send_message(message)
+            self.logger.debug(f"set target temperature com response: {response}")
             return response
         else:
             print("Error: temperature input invalid in set_target_temperature method")
+            self.logger.error("Error: temperature input invalid in set_target_temperature method")
 
     def start_heater(self):
         """Enables the device heating element.
         Note: can read the set value with self.send_message("RHE"). 0 = off, 1 = on.
         """
         self.send_message("SHE1")
+        self.logger.info("started heater")
 
     def stop_heater(self):
         """Disable the device heating element.
         Note: can read the set value with self.send_message("RHE"). 0 = off, 1 = on.
         """
         self.send_message("SHE")
+        self.logger.info("stopped heater")
 
     def is_heater_active(self):
         """Returns True if heater/cooler is activated, otherwise False"""
@@ -117,6 +135,7 @@ class Interface:
                 )
         except Exception as e:
             print("Unable to parse is_heater_active response")
+            self.logger.error(f"Unable to parse is_heater_active response: {response}. {traceback.format_exc()}")
             raise (e)
 
     # DOOR ACTIONS
@@ -125,12 +144,14 @@ class Interface:
         self.send_message(
             "AOD", read_delay=6
         )  # wait 6 seconds for door to open before reading com response
+        self.logger.info("opened door")
 
     def close_door(self):
         """Closes the door"""
         self.send_message(
             "ACD", read_delay=7
         )  # wait 7 seconds for door to close before reading com response
+        self.logger.info("closed door")
 
     def report_door_status(self):
         """Determines if front incubator door is open.
@@ -140,6 +161,7 @@ class Interface:
             1 = door open
         """
         response = self.send_message("RDS")
+        self.logger.debug(f"door status (0 closed, 1 open): {response}")
         return response
 
     def report_labware(self):
@@ -152,6 +174,7 @@ class Interface:
             7 = error, reset and door closed
         """
         response = self.send_message("RLW")
+        self.logger.debug(f"report labware response: {response}")
         return response
 
     # SHAKER COMMANDS
@@ -166,12 +189,15 @@ class Interface:
         """
         if status in [1, "ND"]:
             self.send_message("ASE" + str(status), read_delay=3)
+            self.logger.info("started shaker")
         else:
-            raise ValueError("Error: invalid status in enable_shaker method")
+            self.logger.error("Value Error: invalid status in start_shaker method")
+            raise ValueError("Error: invalid status in start_shaker method")
 
     def stop_shaker(self):
         """Disables the device shaking element"""
         self.send_message("ASE0", read_delay=5)
+        self.logger.info("stopped shaker")
 
     def is_shaker_active(self):
         """Determines if incubator shaker is active.
@@ -184,12 +210,16 @@ class Interface:
         try:
             response = int(response)
             if response in [0, 2]:
+                self.logger.info("shaker is inactive")
                 return False
             elif response == 1:
+                self.logger.info("shaker is active")
                 return True
             else:
+                self.logger.error(f"unable to read shaker state: response = {response}")
                 raise Exception("Unable to read shaker state")
         except Exception as e:
+            self.logger.error(f"Unable to parse is_shaker_active response: {response}")
             print("Unable to parse is_shaker_active response")
             raise (e)
 
@@ -230,23 +260,27 @@ class Interface:
                     + ","
                     + str(phase_shift)
                 )
+                self.logger.info("shaker parameters set")
             else:
+                self.logger.error("Error: invalid amplitude or frequency input values in set_shaker_parameters method")
                 print(
                     "Error: invalid amplitude or frequency input values in set_shaker_parameters method"
                 )
 
         except Exception as e:
+            self.logger.error(f"Error: unable to set shaker parameters. {e}")
+            self.logger.error(traceback.format_exc())
             print(f"Error: unable to set shaker parameters. {e}")
             raise e
 
     # HELPER COMMANDS
     def send_message(self, message_string, device_id=2, stack_floor=0, read_delay=0.5):
-        """Formats and sends message to Tekmatic Device, then collects device response
+        """Formats and sends message to Inheco Device, then collects device response
 
         Arguments:
-            message_string: (str) message string to send to tekmatic device
-            device_id: (int) ID of the tekmatic device that will receive the message, default 2
-            stack_floor: (int) level of the tekmatic device. Need to specify in case several devices are stacked, default 0
+            message_string: (str) message string to send to inheco device
+            device_id: (int) ID of the inheco device that will receive the message, default 2
+            stack_floor: (int) level of the inheco device. Need to specify in case several devices are stacked, default 0
             read_delay: (float) seconds to wait before reading com response, default .5 seconds
 
         Returns:
@@ -266,12 +300,15 @@ class Interface:
             self.incubator_com.sendMsg(
                 bytes_message, bytes_message_length, bytes_device_ID, bytes_stack_floor
             )
+            self.logger.debug(f"sent message: bytes_message={bytes_message}, bytes_message_length={bytes_message_length}, bytes_device_ID={bytes_device_ID}, bytes_stack_floor={bytes_stack_floor}")
 
             time.sleep(read_delay)
 
             # Read COM port response
             response = self.incubator_com.readCom()
+            self.logger.debug(f"sent message response: {response}")
             formatted_response = self.format_response(response)
+            self.logger.debug(f"sent message formatted response: {formatted_response}")
 
             return formatted_response
 
@@ -307,4 +344,4 @@ class Interface:
 if __name__ == "__main__":
     com = Interface()
     com.initialize_device()
-    print("Tekmatic device connected and initialized")
+    print("Inheco incubator device connected and initialized")
