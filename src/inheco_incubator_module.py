@@ -119,46 +119,69 @@ def start_rest_node(device: int, port: int, device_id: int, stack_floor: int):
         device=device,
     )
 
+    @rest_module.startup()
+    def inheco_startup(state: State):
+        """Initializes the inheco interface and opens the COM connection"""
+        # logger.info("startup called")
+        print("STARTUP REST NODE CALLED")   # TESTING
+        state.incubator = None
+        state.stack_floor = stack_floor
+        # state.incubator = Interface()
+        # state.incubator.initialize_device()
+        state.is_incubating_only = False
+        state.incubation_seconds_remaining = 0
+        # logger.info("startup complete")
+
+    @rest_module.shutdown()
+    def inheco_shutdown(state: State):
+        """Handles cleaning up the incubator object. This is also an admin action"""
+        # logger.info("shutdown called")
+        print("SHUTDOWN REST NODE CALLED")  # TESTING
+        if state.incubator is not None:
+            state.incubator.close_connection()
+            del state.incubator
+        # logger.info("shutdown complete")
+
 # create logger
-logger = logging.getLogger(__name__)
+# logger = logging.getLogger(__name__)
 
-# create rest module
-rest_module = CustomRESTModule(
-    name="inheco_incubator_module",
-    version="0.0.1",
-    description="A REST node to control Inheco Single Plate Incubators",
-    model="inheco",
-)
+# # create rest module
+# rest_module = CustomRESTModule(
+#     name="inheco_incubator_module",
+#     version="0.0.1",
+#     description="A REST node to control Inheco Single Plate Incubators",
+#     model="inheco",
+# )
 
-# add arguments
-rest_module.arg_parser.add_argument(
-    "--dll_path",
-    type=str,
-    help="path to incubator control dll (ComLib.dll)",
-    default="C:\\Program Files\\INHECO\\Incubator-Control\\ComLib.dll",
-)
-rest_module.arg_parser.add_argument(
-    "--device_id",
-    type=int,
-    help="device ID of the Inheco Incubator device ",
-    default=2,
-)
-rest_module.arg_parser.add_argument(
-    "--stack_floor",
-    type=int,
-    nargs="+",
-    help="stack floor of the Inheco Incubator device",
-    default=0,
-)
-rest_module.arg_parser.add_argument(
-    "--device",
-    type=str,
-    help="Serial port for communicating with the device",
-    default="COM5",
-)
+# # add arguments
+# rest_module.arg_parser.add_argument(
+#     "--dll_path",
+#     type=str,
+#     help="path to incubator control dll (ComLib.dll)",
+#     default="C:\\Program Files\\INHECO\\Incubator-Control\\ComLib.dll",
+# )
+# rest_module.arg_parser.add_argument(
+#     "--device_id",
+#     type=int,
+#     help="device ID of the Inheco Incubator device ",
+#     default=2,
+# )
+# rest_module.arg_parser.add_argument(
+#     "--stack_floor",
+#     type=int,
+#     nargs="+",
+#     help="stack floor of the Inheco Incubator device",
+#     default=0,
+# )
+# rest_module.arg_parser.add_argument(
+#     "--device",
+#     type=str,
+#     help="Serial port for communicating with the device",
+#     default="COM5",
+# )
 
-# parse the arguments
-args = rest_module.arg_parser.parse_args()
+# # parse the arguments
+# args = rest_module.arg_parser.parse_args()
 
 
 
@@ -170,60 +193,60 @@ args = rest_module.arg_parser.parse_args()
 
 
 
-@rest_module.startup()
-def inheco_startup(state: State):
-    """Initializes the inheco interface and opens the COM connection"""
-    logger.info("startup called")
-    state.incubator = None
-    state.stack_floor = current_device_stack_floor
-    state.incubator = Interface()
-    state.incubator.initialize_device()
-    state.is_incubating_only = False
-    state.incubation_seconds_remaining = 0
-    logger.info("startup complete")
+    # @rest_module.startup()
+    # def inheco_startup(state: State):
+    #     """Initializes the inheco interface and opens the COM connection"""
+    #     logger.info("startup called")
+    #     state.incubator = None
+    #     state.stack_floor = current_device_stack_floor
+    #     state.incubator = Interface()
+    #     state.incubator.initialize_device()
+    #     state.is_incubating_only = False
+    #     state.incubation_seconds_remaining = 0
+    #     logger.info("startup complete")
 
-@rest_module.shutdown()
-def inheco_shutdown(state: State):
-    """Handles cleaning up the incubaotr object. This is also an admin action"""
-    logger.info("shutdown called")
-    if state.incubator is not None:
-        state.incubator.close_connection()
-        del state.incubator
-    logger.info("shutdown complete")
+    # @rest_module.shutdown()
+    # def inheco_shutdown(state: State):
+    #     """Handles cleaning up the incubaotr object. This is also an admin action"""
+    #     logger.info("shutdown called")
+    #     if state.incubator is not None:
+    #         state.incubator.close_connection()
+    #         del state.incubator
+    #     logger.info("shutdown complete")
 
-@rest_module.state_handler()
-def inheco_state_handler(state: State) -> ModuleState:
-    """Returns the state of the Inheco device and module"""
-    incubator: Optional[Interface] = state.incubator
+    # @rest_module.state_handler()
+    # def inheco_state_handler(state: State) -> ModuleState:
+    #     """Returns the state of the Inheco device and module"""
+    #     incubator: Optional[Interface] = state.incubator
 
-    if incubator is None:
-        return ModuleState(
-            status=state.status,
-            error=state.error,
-        )
+    #     if incubator is None:
+    #         return ModuleState(
+    #             status=state.status,
+    #             error=state.error,
+    #         )
 
-    if not incubator.is_busy or (incubator.is_busy and state.is_incubating_only):
-        # query for fresh state details and save to cache
-        logger.debug("querying fresh state")
-        state.cached_current_shaker_active = incubator.is_shaker_active()
-        state.cached_current_heater_active = incubator.is_heater_active()
-        state.cached_current_actual_temperature = incubator.get_actual_temperature()
-        state.cached_current_target_temperature = incubator.get_target_temperature()
-    else:
-        logger.debug("using cached state")
+    #     if not incubator.is_busy or (incubator.is_busy and state.is_incubating_only):
+    #         # query for fresh state details and save to cache
+    #         logger.debug("querying fresh state")
+    #         state.cached_current_shaker_active = incubator.is_shaker_active()
+    #         state.cached_current_heater_active = incubator.is_heater_active()
+    #         state.cached_current_actual_temperature = incubator.get_actual_temperature()
+    #         state.cached_current_target_temperature = incubator.get_target_temperature()
+    #     else:
+    #         logger.debug("using cached state")
 
-    # if the shaker is actually busy, the previous cashed values will be returned
-    return ModuleState.model_validate(
-        {
-            "status": state.status,
-            "error": state.error,
-            "target_temp": state.cached_current_target_temperature,
-            "actual_temp": state.cached_current_actual_temperature,
-            "shaker_active": state.cached_current_shaker_active,
-            "heater_active": state.cached_current_heater_active,
-            "incubation_seconds_remaining": state.incubation_seconds_remaining,
-        }
-    )
+    #     # if the shaker is actually busy, the previous cashed values will be returned
+    #     return ModuleState.model_validate(
+    #         {
+    #             "status": state.status,
+    #             "error": state.error,
+    #             "target_temp": state.cached_current_target_temperature,
+    #             "actual_temp": state.cached_current_actual_temperature,
+    #             "shaker_active": state.cached_current_shaker_active,
+    #             "heater_active": state.cached_current_heater_active,
+    #             "incubation_seconds_remaining": state.incubation_seconds_remaining,
+    #         }
+    #     )
 
 
 # # OPEN TRAY ACTION
@@ -467,25 +490,43 @@ if __name__ == "__main__":
 
     # Collect the args from local and pass them to the REST Node arg parser
     args = local_arg_parser.parse_args()
+    print("CHECKING ARGS PARSED")
     print(args.stack_floor)
     print(args.port)
 
+    print("before instantiating rest node")
+    # Try to start one of the rest nodes
+    rest_node = start_rest_node(
+        device = int(args.device),
+        port = int(args.port[0]),
+        device_id= - int(args.device_id), 
+        stack_floor=int(args.stack_floor[0])
+    )
+    print("After instantiating rest node, before starting")
+
+    rest_node.start()
+
+    print("After starting rest node")
 
     # loop through for each floor provided
-    for i in range(len(args.stack_floor)):
+    # for i in range(len(args.stack_floor)):
+        # p = multiprocessing.Process(
+        #     target = start_rest_node,
+        #     args
+        # )
         # pass
 
         # set rest node variables for each device
         # rest_module.arg_parser = local_arg_parser
-        rest_module.port = args.port[i]
-        rest_module.device = args.device
-        current_device_stack_floor = args.stack_floor[i]
+        # rest_module.port = args.port[i]
+        # rest_module.device = args.device
+        # current_device_stack_floor = args.stack_floor[i]
 
-        print(f"Port: {rest_module.port}")
-        print(f"Device: {rest_module.device}")
-        print(f"Stack floor: {current_device_stack_floor}")
+        # print(f"Port: {rest_module.port}")
+        # print(f"Device: {rest_module.device}")
+        # print(f"Stack floor: {current_device_stack_floor}")
 
-        rest_module.start()
+        # rest_module.start()
 
 
 
