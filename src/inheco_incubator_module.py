@@ -30,6 +30,8 @@ from wei.types.module_types import (
     ModuleState,
 )
 
+import multiprocessing
+
 
 ################################################################################################################################
 # CUSTOM WEI REST NODE CLASS INIT (need to allow multiple port entries from user for multiple devices)
@@ -107,6 +109,16 @@ class CustomRESTModule(RESTModule):
             )
 ##############################################################################################################
 
+def start_rest_node(device: int, port: int, device_id: int, stack_floor: int):
+    rest_module = CustomRESTModule(
+        name = f"inheco_incubator_module_devID{device_id}_stackFloor{stack_floor}",
+        version="0.0.1", 
+        description = f"A REST node to control Inheco incubator with device ID {device_id} and stack floor {stack_floor}", 
+        model = "inheco",
+        port=port,
+        device=device,
+    )
+
 # create logger
 logger = logging.getLogger(__name__)
 
@@ -146,7 +158,9 @@ rest_module.arg_parser.add_argument(
 )
 
 # parse the arguments
-args = rest_module.arg_parser.parse_args()     
+args = rest_module.arg_parser.parse_args()
+
+
 
 # format logging file based on device id
 # logging.basicConfig(
