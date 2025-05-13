@@ -6,6 +6,8 @@ import logging
 import time
 import traceback
 from typing import Optional
+import sys
+import subprocess
 
 from starlette.datastructures import State
 from typing_extensions import Annotated
@@ -76,12 +78,30 @@ local_argument_parser.add_argument(
 )
 
 args = local_argument_parser.parse_args()
-print("LOCAL ARGS")
-print(args)
+# print("LOCAL ARGS")
+# print(args)
 
+ports = args.port
+stack_floors = args.stack_floor
+
+# testing
+print(f"Ports: {ports}")
+print(f"Stack floors: {stack_floors}")
+
+if len(ports) != len(stack_floors):
+    print("Error: Number of ports and stack floors must match.")
+    raise Exception
 
 # create logger
 logger = logging.getLogger(__name__)
+
+for i, (port, stack_floor) in enumerate(zip(ports, stack_floors)):
+    print(f"Launching REST Node with port: {port}, and stack floor {stack_floor}")
+    
+
+
+
+
 
 # create rest module
 rest_module = CustomRESTModule(
