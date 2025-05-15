@@ -18,8 +18,8 @@ app = FastAPI()
 
 # Global or shared config
 config = {}
-# com_port = None
 
+# GENERAL ACTIONS
 @app.get("/")
 def read_root():
     return {"message": f"Running with device(s) on COM port {config['device']}"}
@@ -37,11 +37,17 @@ async def startup_event():
 
 @app.get("/initialize", summary="initializes incubator at specified stack_floor")
 def initialize(stack_floor: int = Query(..., description="Stack floor number")):
-    """Opens the door"""
+    """Initializes the device"""
     device.initialize_device(stack_floor=stack_floor)
 
+@app.get("/reset", summary="resets the incubator at specified stack_floor")
+def reset(stack_floor: int = Query(..., description="Stack floor number")):
+    """Resets the device"""
+    device.reset_device(stack_floor=stack_floor)
 
-# # DOOR ACTIONS  (Q: Why can't these be post actions?)
+
+
+# DOOR ACTIONS  (Q: Why can't these be post actions?)
 @app.get("/open_door", summary="opens the incubator door at specified stack_floor")
 def open_door(stack_floor: int = Query(..., description="Stack floor number")):
     """Opens the door"""
@@ -51,6 +57,15 @@ def open_door(stack_floor: int = Query(..., description="Stack floor number")):
 def close_door(stack_floor: int = Query(..., description="Stack floor number")):
     """Closes the door"""
     device.close_door(stack_floor=stack_floor)
+
+
+# TEMPERATURE ACTIONS
+@app.get("/get_actual_temperature", summary="returns the actual temperature of the incubator at the specified stack floor")
+def get_actual_temperature(stack_floor: int = Query(..., description="Stack floor number")) -> float:
+    """Returns actual temperature"""
+    temperature = device.get_actual_temperature(stack_floor=stack_floor)
+    return temperature
+
 
 
 

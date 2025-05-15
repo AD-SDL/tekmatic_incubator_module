@@ -19,7 +19,6 @@ class Interface:
         self,
         port,
         dll_path=r"C:\\Program Files\\INHECO\\Incubator-Control\\ComLib.dll",
-        # port="COM5",
     ):
         """Initializes and opens the connection to the incubator"""
 
@@ -33,7 +32,7 @@ class Interface:
 
         self.incubator_com = Com()
         self.open_connection()
-        # self.initialize_device()  # NEED TO DO THIS PER NODE! NOT IN THE INTERFACE
+        # initialization is done by each node on startup
 
     # DEVICE CONTROL
     def open_connection(self):
@@ -58,12 +57,16 @@ class Interface:
 
     def initialize_device(self, stack_floor: int):   # WORKING
         """Initializes the Inheco Single Plate Incubator Shaker Device through the open connection."""
-        self.send_message("AID", read_delay=3)
+        self.send_message(
+            "AID",
+            stack_floor=stack_floor,
+            read_delay=3
+        )
         self.logger.info(f"Inheco incubator initialized at stack floor {stack_floor}")
         print(f"Inheco incubator initialized at stack floor {stack_floor}")
         # TODO: do I need a delay here to wait while it initializes?
 
-    def reset_device(self, stack_floor: int):
+    def reset_device(self, stack_floor: int):   # WRITTEN BUT NOT TESTED
         """Resets the Inheco Single Plate Incubator Device
         Note: seems to respond 88 regardless of success or failure
         """
@@ -76,37 +79,37 @@ class Interface:
         print("device reset")
         return response
 
-    def report_error_flags(self, stack_floor):
+    def report_error_flags(self, stack_floor: int):
         """Reports any error flags present on device
         Responses:
             0 = no errors
         """
-        response = self.send_message("REF")
+        response = self.send_message("REF", stack_floor=stack_floor)
         self.logger.debug(f"error flags response: {response}")
         return response
 
     # TEMPERATURE CONTROL
-    def get_actual_temperature(self, stack_floor):
+    def get_actual_temperature(self, stack_floor: int):
         """Returns the actual temperature as measured by main sensor on incubator (sensor 1).
         Note: There are two other sensors that we don't report. Get their values with "RAT2" and "RAT3" """
-        response = self.send_message("RAT")
+        response = self.send_message("RAT", stack_floor=stack_floor)
         temperature = float(response) / 10
         self.logger.info(f"get actual temperature: {temperature}")
         return temperature
 
-    def get_target_temperature(self, stack_floor):
+    def get_target_temperature(self, stack_floor: int):
         """Returns the set target temperature of the incubator"""
-        response = self.send_message("RTT")
+        response = self.send_message("RTT", stack_floor=stack_floor)
         temperature = float(response) / 10
         self.logger.info(f"get target temperature: {temperature}")
         return temperature
 
-    def set_target_temperature(self, stack_floor, temperature: float = 22.0,):
+    def set_target_temperature(self, stack_floor: int, temperature: float = 22.0,):
         """Sets the target temperature, if no temperature specified, defaults to 22 deg C"""
         if 0 <= (int(temperature * 10)) <= 800:
             self.logger.info("setting target temperature")
             message = "STT" + str(int(temperature * 10))
-            response = self.send_message(message)
+            response = self.send_message(message, stack_floor=stack_floor)
             self.logger.debug(f"set target temperature com response: {response}")
             return response
         else:
@@ -318,8 +321,10 @@ class Interface:
 
             # Read COM port response
             response = self.incubator_com.readCom()
+            print(f"RESPONSE FROM COM PORT: {response}")
             self.logger.debug(f"sent message response: {response}")
             formatted_response = self.format_response(response)
+            print(f"FORMATTED RESPONSE FROM COM PORT: {formatted_response}")
             self.logger.debug(f"sent message formatted response: {formatted_response}")
 
             return formatted_response

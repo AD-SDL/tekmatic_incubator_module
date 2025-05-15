@@ -84,20 +84,39 @@ def inheco_startup(state: State):
     state.base_url = f"http://{args.interface_host}:{args.interface_port}"   # NOTE: does not work with https???
     print(f"base_url: {state.base_url}")
 
-    response = send_request(
+    response = send_get_request(
         base_url=state.base_url,
         action_string="initialize",
         stack_floor=state.stack_floor)
 
     print(response) # TESTING
+    logger.debug(response)
 
     logger.info("startup complete")
 
 
-   
 
 
-def send_request(base_url, action_string, stack_floor, arguments=None):
+
+# HELPER FUNCTIONS
+
+# TODO: should this return step succeded?
+def reset_device(state: State):  # for use in admin actions
+    """Resets the device"""
+    logger.info("restart called")
+    response = send_get_request(
+        base_url=state.base_url,
+        action_string = "reset",
+        stack_floor=state.stack_floor,
+    )
+
+    print(response) # TESTING
+    logger.debug(response)
+
+    logger.info("restart complete")
+
+
+def send_get_request(base_url, action_string, stack_floor, arguments=None):
     "Send the http requests"
     response = None
     try:
@@ -110,6 +129,8 @@ def send_request(base_url, action_string, stack_floor, arguments=None):
     except Exception as e:
         raise e
     return response
+
+
 
 
 # TODO: COM port connection should be shut down separately from the node now
@@ -165,18 +186,16 @@ def open(
 ) -> StepResponse:
     """Opens the Inheco incubator tray"""
 
-    # disable the shaker if shaking
-    # logger.info("open called")
-    # if state.cached_current_shaker_active:
-    #     state.incubator.disable_shaker()
-    # state.incubator.open_door()
-    # logger.info("open complete")
+
     print("open door called")
     logger.info("open called")
+
     # TODO: disable the shaker if shaking
-    response = send_request(state.base_url, action_string="open_door", stack_floor=state.stack_floor)
+    response = send_get_request(state.base_url, action_string="open_door", stack_floor=state.stack_floor)
+
     print(response)  # TESTING
     logger.debug(response)
+
     logger.info("open complete")
 
     return StepResponse.step_succeeded()
@@ -191,8 +210,7 @@ def close(
     """Closes the Tekmatic incubator tray"""
 
     logger.info("close called")
-    # state.incubator.close_door()
-    response = send_request(state.base_url, action_string="close_door", stack_floor=state.stack_floor)
+    response = send_get_request(state.base_url, action_string="close_door", stack_floor=state.stack_floor)
     print(response)  # TESTING
     logger.debug(response)
     logger.info("close complete")
