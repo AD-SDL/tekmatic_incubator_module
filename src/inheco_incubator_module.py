@@ -7,6 +7,7 @@ import time
 import traceback
 from typing import Optional
 import requests
+# import json
 
 from starlette.datastructures import State
 from typing_extensions import Annotated
@@ -20,6 +21,10 @@ from wei.types.step_types import (
 )
 
 from inheco_incubator_interface import Interface
+from pydantic_models import TemperatureRequest, StartShakerRequest, SetShakerParametersRequest
+
+from pydantic import Json
+
 
 # create logger
 logger = logging.getLogger(__name__)
@@ -116,11 +121,11 @@ def reset_device(state: State):  # for use in admin actions
     logger.info("restart complete")
 
 
-def send_get_request(base_url, action_string, stack_floor, arguments=None):
-    "Send the http requests"
+def send_get_request(base_url, action_string: str, stack_floor: int):
+    "Sends http get requests"
     response = None
     try:
-        endpoint = f"/{action_string}?stack_floor={args.stack_floor}"
+        endpoint = f"/{action_string}?stack_floor={stack_floor}"
         request_url = f"{base_url}{endpoint}"
         print("request url")
         print(request_url)
@@ -130,6 +135,17 @@ def send_get_request(base_url, action_string, stack_floor, arguments=None):
         raise e
     return response
 
+def send_post_request(base_url, action_string, arguments_dict=None):
+    "Sends http post requests"
+    response = None
+    try:
+        endpoint = f"/{action_string}"
+        request_url = f"{base_url}{endpoint}"
+        response = requests.post(request_url, json=arguments_dict)
+        response.raise_for_status()
+    except Exception as e:
+        raise e
+    return response
 
 
 
@@ -217,129 +233,174 @@ def close(
 
     return StepResponse.step_succeeded()
 
+@rest_module.action(
+    name="set_temperature", description="Set target incubation temperature"
+)
+def set_temperature(
+    state: State,
+    action: ActionRequest,
+    temperature: Annotated[
+        float,
+        "temperature in Celsius to one decimal point. 0.0 - 80.0 are valid inputs, 22.0 default",
+    ] = 22.0,
+    activate: Annotated[
+        bool, "(optional) turn on heating/cooling element, on = True (default), off = False"
+    ] = True,    # TODO: there's a bug here! activate is not being passed in as a bool, it's a string but even a "false" is True when converted to boolean
+) -> StepResponse:
+    """Sets the temperature in Celsius on the Tekmatic incubator. If activate is set to False, heating element will turn off """
 
-# # SET TEMP ACTION
-# @rest_module.action(
-#     name="set_temperature", description="Set target incubation temperature"
-# )
-# def set_temperature(
-#     state: State,
-#     action: ActionRequest,
-#     temperature: Annotated[
-#         float,
-#         "temperature in Celsius to one decimal point. 0.0 - 80.0 are valid inputs, 22.0 default",
-#     ] = 22.0,
-#     activate: Annotated[
-#         bool, "(optional) turn on heating/cooling element, on = True (default), off = False"
-#     ] = True,
-# ) -> StepResponse:
-#     """Sets the temperature in Celsius on the Tekmatic incubator. If activate is set to False, heating element will turn off """
+    logger.info("set temperature called")
 
-#     logger.info("set temperature called")
-#     try:
-#         response = state.incubator.set_target_temperature(float(temperature))
+    # make sure activate variable is a boolean
 
-#         if activate:
-#             state.incubator.start_heater()
-#         else:
-#             state.incubator.stop_heater()
+    print(f"activate: {activate}, {type(activate)}")
+    try:
+        activate = bool(activate)
+    except Exception as e:
+        print(f"cannot convert activate argument {activate} into boolean")
+        raise e
+    print(f"activate: {activate}, {type(activate)}")
 
-#         if response == "":
-#             logger.info("set temperature complete")
-#             return StepResponse.step_succeeded()
-#         else:
-#             logger.error(f"Set temperature action failed, unsuccessful response: {response}")
-#             return StepResponse.step_failed(
-#                 error=f"Set temperature action failed, unsuccessful response: {response}"
-#             )
+    # set the target temperature
+    try:
+        payload = TemperatureRequest(stack_floor=state.stack_floor, temperature=temperature)
+        payload_dict = payload.model_dump()
+        response = send_post_request(state.base_url, "set_target_temperature", arguments_dict=payload_dict)
+        print(response)
+    except Exception as e:
+        return StepResponse.step_failed(error=str(e))  # DOES THIS WORK?
 
-#     except Exception as e:
-#         logger.error(f"Error in set_temperature action: {e}")
-#         logger.error(traceback.format_exc())
-#         print(f"Error in set_temperature action: {e}")
-#         return StepResponse.step_failed(error="Set temperature action failed")
+    # turn on the heater if activate variable = True
+    # TODO: fix bug here!!!! 
+    try:
+        if activate:
+            response = send_get_request(state.base_url, "start_heater", stack_floor=state.stack_floor)
+        else:
+            response = send_get_request(state.base_url, "stop_heater", stack_floor=state.stack_floor)
+    except Exception as e:
+        return StepResponse.step_failed(error=str(e))
+    return StepResponse.step_succeeded()
 
 
-# # INCUBATE ACTION
-# @rest_module.action(
-#     name="incubate", description="Start incubation with optional shaking"
-# )
-# def incubate(
-#     state: State,
-#     action: ActionRequest,
-#     temperature: Annotated[
-#         float,
-#         "temperature in celsius to one decimal point. 0.0 - 80.0 are valid inputs, 22.0 default",
-#     ] = 22.0,
-#     shaker_frequency: Annotated[
-#         float,
-#         "shaker frequency in Hz (1Hz = 60rpm). 0 (no shaking) and 6.6-30.0 are valid inputs, default is 14.2 Hz",
-#     ] = 14.2,
-#     wait_for_incubation_time: Annotated[
-#         bool,
-#         "True if action should block until the specified incubation time has passed, False to continue immediately after starting the incubation",
-#     ] = False,
-#     incubation_time: Annotated[int, "Time to incubate in seconds"] = None,
-# ) -> StepResponse:
-#     """Starts incubation at the specified temperature, optionally shakes, and optionally blocks all other actions until incubation complete"""
+# LEFTOVER TODO: log the errors correctly
+    # try:
+    #     response = state.incubator.set_target_temperature(float(temperature))
 
-#     logger.info("incubate called")
-#     # set the temperature and activate heating
-#     try:
-#         state.incubator.set_target_temperature(temperature)
-#         state.incubator.start_heater()
-#         logger.info("heater set and started")
-#     except Exception as e:
-#         logger.error(f"Error starting heater in incubate action: {e}")
-#         logger.error(traceback.format_exc())
-#         print(f"Error starting heater in incubate action: {e}")
-#         return StepResponse.step_failed(
-#             error="Failed to set temperature in incubate action"
-#         )
+    #     if activate:
+    #         state.incubator.start_heater()
+    #     else:
+    #         state.incubator.stop_heater()
 
-#     try:
-#         if not shaker_frequency == 0:   # don't start the shaker if user sets shaker frequency to 0
-#             state.incubator.set_shaker_parameters(frequency=shaker_frequency)
-#             state.incubator.start_shaker()
-#             logger.info("shaker set and started")
-#     except Exception as e:
-#         logger.error(f"Error starting shaker in incubate action: {e}")
-#         logger.error(traceback.format_exc())
-#         print(f"Error starting shaker in incubate action: {e}")
-#         return StepResponse.step_failed(
-#             error=f"Failed to set shaker parameters or start shaking in incubate action: {traceback.format_exc()}"
-#         )
+    #     if response == "":
+    #         logger.info("set temperature complete")
+    #         return StepResponse.step_succeeded()
+    #     else:
+    #         logger.error(f"Set temperature action failed, unsuccessful response: {response}")
+    #         return StepResponse.step_failed(
+    #             error=f"Set temperature action failed, unsuccessful response: {response}"
+    #         )
 
-#     if not wait_for_incubation_time:
-#         logger.info("incubate call complete - not waiting for incubation time")
-#         return StepResponse.step_succeeded()
-#     else:
-#         logger.info("incubation call - waiting for incubation time to finish")
-#         incubation_seconds_completed = 0
-#         total_incubation_seconds = None
-#         if incubation_time:
-#             total_incubation_seconds = incubation_time
+    # except Exception as e:
+    #     logger.error(f"Error in set_temperature action: {e}")
+    #     logger.error(traceback.format_exc())
+    #     print(f"Error in set_temperature action: {e}")
+    #     return StepResponse.step_failed(error="Set temperature action failed")
 
-#         print(f"Incubation action: Starting incubation for {incubation_time} seconds")
 
-#         while incubation_seconds_completed < total_incubation_seconds:
-#             time.sleep(1)
-#             incubation_seconds_completed += 1
-#             state.incubation_seconds_remaining = (
-#                 total_incubation_seconds - incubation_seconds_completed
-#             )
-#         logger.info("incubation time complete")
 
-#         # reset the incubation_time_remaining variable for next actions
-#         state.incubation_seconds_remaining = 0
 
-#         # stop shaking after incubation complete
-#         state.incubator.stop_shaker()
+# INCUBATE ACTION
+@rest_module.action(
+    name="incubate", description="Start incubation with optional shaking"
+)
+def incubate(
+    state: State,
+    action: ActionRequest,
+    temperature: Annotated[
+        float,
+        "temperature in celsius to one decimal point. 0.0 - 80.0 are valid inputs, 22.0 default",
+    ] = 22.0,
+    shaker_frequency: Annotated[
+        float,
+        "shaker frequency in Hz (1Hz = 60rpm). 0 (no shaking) and 6.6-30.0 are valid inputs, default is 14.2 Hz",
+    ] = 14.2,
+    wait_for_incubation_time: Annotated[
+        bool,
+        "True if action should block until the specified incubation time has passed, False to continue immediately after starting the incubation",
+    ] = False,
+    incubation_time: Annotated[int, "Time to incubate in seconds"] = None,
+) -> StepResponse:
+    """Starts incubation at the specified temperature, optionally shakes, and optionally blocks all other actions until incubation complete"""
 
-#         print("Incubation action: Incubation complete")
+    logger.info("incubate called")
+    # set the temperature and activate heating
+    try:
+        # set temperature
+        payload = TemperatureRequest(stack_floor=state.stack_floor, temperature=temperature)
+        payload_dict = payload.model_dump()
+        send_post_request(state.base_url, "set_target_temperature", arguments_dict=payload_dict)
+        print("temperature set")
 
-#         logger.info("incubation completes")
-#         return StepResponse.step_succeeded()
+        # start the heater
+        send_get_request(state.base_url, "start_heater", stack_floor=state.stack_floor)
+
+        logger.info("heater set and started")
+    except Exception as e:
+        logger.error(f"Error starting heater in incubate action: {e}")
+        logger.error(traceback.format_exc())
+        print(f"Error starting heater in incubate action: {e}")
+        return StepResponse.step_failed(
+            error="Failed to set temperature in incubate action"
+        )
+
+    # try:    # TODO: THERE'S AN ERROR HERE! START HERE TOMORROW!
+    #     if not shaker_frequency == 0:   # don't start the shaker if user sets shaker frequency to 0
+    #         # set the shaker parameters
+    #         payload = SetShakerParametersRequest(stack_floor=state.stack_floor, frequency=shaker_frequency)
+    #         payload_dict = payload.model_dump()
+    #         send_post_request(state.base_url, "set_shaker_parameters", arguments_dict=payload_dict)
+
+    #         # start the shaker
+    #         send_get_request(state.base_url, "start_shaker", stack_floor=state.stack_floor)
+    #         logger.info("shaker set and started")
+    # except Exception as e:
+    #     logger.error(f"Error starting shaker in incubate action: {e}")
+    #     logger.error(traceback.format_exc())
+    #     print(f"Error starting shaker in incubate action: {e}")
+    #     return StepResponse.step_failed(
+    #         error=f"Failed to set shaker parameters or start shaking in incubate action: {traceback.format_exc()}"
+    #     )
+
+    if not wait_for_incubation_time:
+    #     logger.info("incubate call complete - not waiting for incubation time")
+        return StepResponse.step_succeeded()
+    else:
+    #     logger.info("incubation call - waiting for incubation time to finish")
+    #     incubation_seconds_completed = 0
+    #     total_incubation_seconds = None
+    #     if incubation_time:
+    #         total_incubation_seconds = incubation_time
+
+    #     print(f"Incubation action: Starting incubation for {incubation_time} seconds")
+
+    #     while incubation_seconds_completed < total_incubation_seconds:
+    #         time.sleep(1)
+    #         incubation_seconds_completed += 1
+    #         state.incubation_seconds_remaining = (
+    #             total_incubation_seconds - incubation_seconds_completed
+    #         )
+    #     logger.info("incubation time complete")
+
+    #     # reset the incubation_time_remaining variable for next actions
+    #     state.incubation_seconds_remaining = 0
+
+    #     # stop shaking after incubation complete
+    #     send_get_request(state.base_url, "stop_shaker", stack_floor=state.stack_floor)
+
+    #     print("Incubation action: Incubation complete")
+
+    #     logger.info("incubation completed")
+        return StepResponse.step_succeeded()
 
 
 # ****************#

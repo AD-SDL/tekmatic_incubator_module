@@ -1,12 +1,23 @@
 from inheco_incubator_interface import Interface
 from time import sleep
 
+
 device = Interface(port="COM5")
-device.initialize_device(0)  # this closes the first door
+# device.initialize_device(0)  # this closes the first door
 device.initialize_device(1)  # this also closes the door
 
-print(device.get_actual_temperature(1))
+print(device.is_shaker_active(1))
+device.stop_shaker(1)
+print(device.is_shaker_active(1))
 
+# print(device.get_actual_temperature(1))
+# # print(device.get_target_temperature(1))
+
+# # print(device.get_actual_temperature(0))
+# device.set_target_temperature(1, 30.0)
+# print("set temperature worked")
+
+# print(device.get_target_temperature(1))
 
 
 
