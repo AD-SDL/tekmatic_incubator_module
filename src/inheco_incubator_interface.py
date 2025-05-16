@@ -1,13 +1,14 @@
-"""Interface for controlling the Inheco Single Plate Incubator Shaker device."""
+"""
+Interface for controlling the Inheco Single Plate Incubator Shaker device.
+"""
 
+import argparse
 import logging
 import threading
 import time
 import traceback
 
 import clr
-
-import argparse
 
 
 class Interface:
@@ -23,7 +24,7 @@ class Interface:
         """Initializes and opens the connection to the incubator"""
 
         # set up logger
-        self.port = port   # COM port of the device(s)
+        self.port = port  # COM port of the device(s)
         self.logger = logging.getLogger(__name__)
 
         self.lock = threading.Lock()
@@ -32,7 +33,7 @@ class Interface:
 
         self.incubator_com = Com()
         self.open_connection()
-        # initialization is done by each node on startup
+        # initialization is completed by each node on startup
 
     # DEVICE CONTROL
     def open_connection(self):
@@ -55,25 +56,19 @@ class Interface:
             self.logger.info("Com connection closed")
             print("Com connection closed")
 
-    def initialize_device(self, stack_floor: int):   # DONE
+    def initialize_device(self, stack_floor: int):
         """Initializes the Inheco Single Plate Incubator Shaker Device through the open connection."""
-        self.send_message(
-            "AID",
-            stack_floor=stack_floor,
-            read_delay=3
-        )
+        self.send_message("AID", stack_floor=stack_floor, read_delay=3)
         self.logger.info(f"Inheco incubator initialized at stack floor {stack_floor}")
         print(f"Inheco incubator initialized at stack floor {stack_floor}")
         # TODO: do I need a delay here to wait while it initializes?
 
-    def reset_device(self, stack_floor: int):   # DONE
+    def reset_device(self, stack_floor: int):
         """Resets the Inheco Single Plate Incubator Device
         Note: seems to respond 88 regardless of success or failure
         """
         response = self.send_message(
-            "SRS",
-            stack_floor=stack_floor,
-            read_delay=5
+            "SRS", stack_floor=stack_floor, read_delay=5
         )  # wait 5 seconds for device to reset before reading response
         self.logger.info("device reset")
         print("device reset")
@@ -89,7 +84,7 @@ class Interface:
         return response
 
     # TEMPERATURE CONTROL
-    def get_actual_temperature(self, stack_floor: int) -> float:  # DONE
+    def get_actual_temperature(self, stack_floor: int) -> float:
         """Returns the actual temperature as measured by main sensor on incubator (sensor 1).
         Note: There are two other sensors that we don't report. Get their values with "RAT2" and "RAT3" """
         response = self.send_message("RAT", stack_floor=stack_floor)
@@ -97,14 +92,18 @@ class Interface:
         self.logger.info(f"get actual temperature: {temperature}")
         return temperature
 
-    def get_target_temperature(self, stack_floor: int) -> float:   # DONE
+    def get_target_temperature(self, stack_floor: int) -> float:
         """Returns the set target temperature of the incubator"""
         response = self.send_message("RTT", stack_floor=stack_floor)
         temperature = float(response) / 10
         self.logger.info(f"get target temperature: {temperature}")
         return temperature
 
-    def set_target_temperature(self, stack_floor: int, temperature: float = 22.0,): # DONE
+    def set_target_temperature(
+        self,
+        stack_floor: int,
+        temperature: float = 22.0,
+    ):
         """Sets the target temperature, if no temperature specified, defaults to 22 deg C"""
         if 0 <= (int(temperature * 10)) <= 800:
             self.logger.info("setting target temperature")
@@ -114,23 +113,25 @@ class Interface:
             return response
         else:
             print("Error: temperature input invalid in set_target_temperature method")
-            self.logger.error("Error: temperature input invalid in set_target_temperature method")
+            self.logger.error(
+                "Error: temperature input invalid in set_target_temperature method"
+            )
 
-    def start_heater(self, stack_floor: int):   # DONE
+    def start_heater(self, stack_floor: int):
         """Enables the device heating element.
         Note: can read the set value with self.send_message("RHE"). 0 = off, 1 = on.
         """
         self.send_message("SHE1", stack_floor=stack_floor)
         self.logger.info("started heater")
 
-    def stop_heater(self, stack_floor: int):   # DONE
+    def stop_heater(self, stack_floor: int):
         """Disable the device heating element.
         Note: can read the set value with self.send_message("RHE"). 0 = off, 1 = on.
         """
         self.send_message("SHE", stack_floor=stack_floor)
         self.logger.info("stopped heater")
 
-    def is_heater_active(self, stack_floor:int):   # DONE
+    def is_heater_active(self, stack_floor: int):
         """Returns True if heater/cooler is activated, otherwise False"""
         response = self.send_message("RHE", stack_floor=stack_floor)
 
@@ -146,11 +147,13 @@ class Interface:
                 )
         except Exception as e:
             print("Unable to parse is_heater_active response")
-            self.logger.error(f"Unable to parse is_heater_active response: {response}. {traceback.format_exc()}")
+            self.logger.error(
+                f"Unable to parse is_heater_active response: {response}. {traceback.format_exc()}"
+            )
             raise (e)
 
     # DOOR ACTIONS
-    def open_door(self, stack_floor: int):   # DONE
+    def open_door(self, stack_floor: int):
         """Opens the door"""
         self.send_message(
             "AOD",
@@ -159,7 +162,7 @@ class Interface:
         )  # wait 6 seconds for door to open before reading com response
         self.logger.info("opened door")
 
-    def close_door(self, stack_floor: int):  # DONE
+    def close_door(self, stack_floor: int):
         """Closes the door"""
         self.send_message(
             "ACD",
@@ -168,7 +171,7 @@ class Interface:
         )  # wait 7 seconds for door to close before reading com response
         self.logger.info("closed door")
 
-    def report_door_status(self, stack_floor: int):   # DONE (TODO: have it return an int?)
+    def report_door_status(self, stack_floor: int):  # (TODO: have it return an int?)
         """Determines if front incubator door is open.
 
         Responses:
@@ -179,7 +182,7 @@ class Interface:
         self.logger.debug(f"door status (0 closed, 1 open): {response}")
         return response
 
-    def report_labware(self, stack_floor:int):    # DONE (TODO: have it return an int?)
+    def report_labware(self, stack_floor: int):  # (TODO: have it return an int?)
         """Determines if labware is present in incubator
 
         Responses:
@@ -193,7 +196,7 @@ class Interface:
         return response
 
     # SHAKER COMMANDS
-    def start_shaker(self, stack_floor:int, status="ND"):   # DONE
+    def start_shaker(self, stack_floor: int, status="ND"):
         """Enables the device shaking element
 
         Arguments:
@@ -204,25 +207,19 @@ class Interface:
         """
         if status in [1, "1", "ND"]:
             self.send_message(
-                "ASE" + str(status),
-                stack_floor=stack_floor,
-                read_delay=3
+                "ASE" + str(status), stack_floor=stack_floor, read_delay=3
             )
             self.logger.info("started shaker")
         else:
             self.logger.error("Value Error: invalid status in start_shaker method")
             raise ValueError("Error: invalid status in start_shaker method")
 
-    def stop_shaker(self, stack_floor:int):  # DONE
+    def stop_shaker(self, stack_floor: int):
         """Disables the device shaking element"""
-        self.send_message(
-            "ASE0",
-            stack_floor=stack_floor,
-            read_delay=5
-        )
+        self.send_message("ASE0", stack_floor=stack_floor, read_delay=5)
         self.logger.info("stopped shaker")
 
-    def is_shaker_active(self, stack_floor: int):  # DONE
+    def is_shaker_active(self, stack_floor: int):
         """Determines if incubator shaker is active.
 
         Returns:
@@ -246,7 +243,9 @@ class Interface:
             print("Unable to parse is_shaker_active response")
             raise (e)
 
-    def set_shaker_parameters(self, stack_floor:int, amplitude: float = 2.0, frequency: float = 14.2):
+    def set_shaker_parameters(
+        self, stack_floor: int, amplitude: float = 2.0, frequency: float = 14.2
+    ):
         """Sets the shaking parameters
 
         Arguments:
@@ -286,7 +285,9 @@ class Interface:
                 )
                 self.logger.info("shaker parameters set")
             else:
-                self.logger.error("Error: invalid amplitude or frequency input values in set_shaker_parameters method")
+                self.logger.error(
+                    "Error: invalid amplitude or frequency input values in set_shaker_parameters method"
+                )
                 print(
                     "Error: invalid amplitude or frequency input values in set_shaker_parameters method"
                 )
@@ -324,7 +325,9 @@ class Interface:
             self.incubator_com.sendMsg(
                 bytes_message, bytes_message_length, bytes_device_ID, bytes_stack_floor
             )
-            self.logger.debug(f"sent message: bytes_message={bytes_message}, bytes_message_length={bytes_message_length}, bytes_device_ID={bytes_device_ID}, bytes_stack_floor={bytes_stack_floor}")
+            self.logger.debug(
+                f"sent message: bytes_message={bytes_message}, bytes_message_length={bytes_message_length}, bytes_device_ID={bytes_device_ID}, bytes_stack_floor={bytes_stack_floor}"
+            )
 
             time.sleep(read_delay)
 
@@ -332,14 +335,13 @@ class Interface:
             response = self.incubator_com.readCom()
             print(f"RESPONSE FROM COM PORT: {response}")
             self.logger.debug(f"sent message response: {response}")
-            formatted_response = self.format_response(response)
+            formatted_response = self.format_response(response, device_id=device_id)
             print(f"FORMATTED RESPONSE FROM COM PORT: {formatted_response}")
             self.logger.debug(f"sent message formatted response: {formatted_response}")
 
             return formatted_response
 
-    def format_response(self, response: str):
-        # TODO: format the message based on device id! not hardcoded 2
+    def format_response(self, response: str, device_id: int):
         """Extracts important message details from longer com response message
 
         Arguments:
@@ -348,9 +350,20 @@ class Interface:
         Returns:
             formatted_response: response from the Com port without extra characters
         """
+        # TODO: format the message based on device id! not hardcoded 2
+        # Q: do we want to allow devices in the same stack to have different device IDs?
+        # To use the below code, need to pass device ID into every FastAPI and device call.
+        # superscript_digits = {
+        #     0: "⁰", 1: "¹", 2: "²", 3: "³", 4: "⁴",
+        #     5: "⁵", 6: "⁶", 7: "⁷", 8: "⁸", 9: "⁹"
+        # }
+        # superscript_device_id = ''.join(superscript_digits[int(d)] for d in str(self.device_id))
+
         # remove extra characters
         formatted_response = response.replace("`", "")
-        formatted_response = formatted_response.replace("²", "")   # the 2 here is actually the device id
+        formatted_response = formatted_response.replace(
+            "²", ""
+        )  # the 2 here is actually the device id
         formatted_response = formatted_response.strip()
 
         # check for '#' response meaning invalid command was sent
@@ -369,7 +382,6 @@ class Interface:
 
 
 if __name__ == "__main__":
-
     argparser = argparse.ArgumentParser()
     argparser.add_argument(
         "--device",
@@ -381,5 +393,4 @@ if __name__ == "__main__":
     device = args.device
 
     com = Interface(port=device)
-    # com.initialize_device()
-    print("Inheco incubator device connected and initialized")
+    print(f"Inheco incubator device connected, {device}")
